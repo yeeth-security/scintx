@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scintx.example/schemas/2020-12/resource-reference.schema.json",
+  "title": "ResourceReference",
+  "description": "A reusable reference to an SBOM, raw scanner report, provenance document, or evidence blob. URLs are mutable; digests carry content integrity.",
+  "type": "object",
+  "required": ["uri", "media_type"],
+  "properties": {
+    "uri": {
+      "type": "string",
+      "format": "uri",
+      "description": "Location or opaque content URI (e.g. urn:scintx:blob:...)."
+    },
+    "media_type": {
+      "type": "string",
+      "description": "MIME type of the referenced resource."
+    },
+    "digests": {
+      "type": "object",
+      "additionalProperties": {"type": "string"},
+      "description": "Map of digest algorithm name to hex-encoded digest (e.g. {\"sha256\": \"...\"}). Strongly recommended."
+    },
+    "format": {
+      "type": "string",
+      "description": "Well-known format identifier, e.g. cyclonedx, spdx, sarif, in-toto."
+    },
+    "format_version": {
+      "type": "string",
+      "description": "Version of the format, e.g. 1.7, 3.0.1, 2.1.0."
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC 3339 timestamp after which an ephemeral URI may be invalid."
+    },
+    "extensions": {
+      "type": "object",
+      "description": "Namespaced non-core metadata."
+    }
+  },
+  "additionalProperties": false
+}

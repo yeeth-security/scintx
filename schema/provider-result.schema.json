@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scintx.example/schemas/2020-12/provider-result.schema.json",
+  "title": "ProviderResult",
+  "description": "A provider's terminal result for one submission. Execution status and security verdict are orthogonal: error/timeout MUST NOT carry a verdict; completed MUST carry a verdict.",
+  "type": "object",
+  "required": ["id", "schema_version", "submission_id", "provider", "capabilities", "capability_manifest_digest", "execution"],
+  "properties": {
+    "id": {"type": "string"},
+    "schema_version": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
+    "submission_id": {"type": "string"},
+    "provider": {
+      "type": "object",
+      "required": ["id", "version"],
+      "properties": {
+        "id": {"type": "string"},
+        "version": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "capability_manifest_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "execution": {"$ref": "#/$defs/Execution"},
+    "verdict": {"$ref": "#/$defs/Verdict"},
+    "findings": {
+      "type": "array",
+      "items": {"$ref": "finding.schema.json"}
+    },
+    "raw_result": {"$ref": "resource-reference.schema.json"},
+    "cache": {"$ref": "#/$defs/CacheInfo"},
+    "extensions": {"type": "object"}
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "description": "completed => verdict MUST be present; error/timeout => verdict MUST NOT be present",
+      "if": {
+        "properties": {"execution": {"properties": {"status": {"const": "completed"}}}}
+      },
+      "then": {"required": ["verdict"]},
+      "else": {
+        "properties": {"verdict": {"not": {}}},
+        "description": "verdict MUST be absent when execution.status is not completed"
+      }
+    },
+    {
+      "description": "verdict.value=pass => findings MUST be empty or contain only non-applicable findings",
+      "if": {
+        "properties": {"verdict": {"properties": {"value": {"const": "pass"}}}}
+      },
+      "then": {
+        "properties": {
+          "findings": {
+            "items": {
+              "properties": {
+                "assessment": {"properties": {"status": {"not": {"const": "affected"}}}}
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "verdict.value=fail|warn => findings MUST contain at least one applicable finding, and derivation.driven_by MUST be non-empty",
+      "if": {
+        "properties": {"verdict": {"properties": {"value": {"enum": ["fail", "warn"]}}}}
+      },
+      "then": {
+        "properties": {
+          "findings": {"minItems": 1},
+          "verdict": {
+            "properties": {
+              "derivation": {
+                "properties": {"driven_by": {"minItems": 1}},
+                "required": ["driven_by"]
+              }
+            },
+            "required": ["derivation"]
+          }
+        }
+      }
+    },
+    {
+      "description": "verdict.value=unknown => derivation.summary MUST explain why",
+      "if": {
+        "properties": {"verdict": {"properties": {"value": {"const": "unknown"}}}}
+      },
+      "then": {
+        "properties": {
+          "verdict": {
+            "properties": {
+              "derivation": {
+                "required": ["summary"],
+                "properties": {"summary": {"minLength": 1}}
+              }
+            },
+            "required": ["derivation"]
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "Execution": {
+      "type": "object",
+      "required": ["status", "started_at", "finished_at"],
+      "properties": {
+        "status": {"type": "string", "enum": ["completed", "error", "timeout"]},
+        "started_at": {"type": "string", "format": "date-time"},
+        "finished_at": {"type": "string", "format": "date-time"},
+        "error": {
+          "type": "object",
+          "required": ["code", "message"],
+          "properties": {
+            "code": {
+              "type": "string",
+              "enum": ["transport_error", "provider_5xx", "provider_4xx", "normalization_error", "semantic_error", "unsupported_version", "timeout"]
+            },
+            "message": {"type": "string"},
+            "detail": {"type": "object"}
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "Verdict": {
+      "type": "object",
+      "required": ["value", "origin"],
+      "properties": {
+        "value": {"type": "string", "enum": ["pass", "warn", "fail", "unknown"]},
+        "origin": {"type": "string", "enum": ["provider", "adapter"]},
+        "rule": {"type": "string"},
+        "derivation": {
+          "type": "object",
+          "properties": {
+            "driven_by": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["finding_id", "weight"],
+                "properties": {
+                  "finding_id": {"type": "string"},
+                  "weight": {"type": "string", "enum": ["primary", "supporting"]}
+                },
+                "additionalProperties": false
+              }
+            },
+            "summary": {"type": "string"}
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "CacheInfo": {
+      "type": "object",
+      "required": ["hit"],
+      "properties": {
+        "hit": {"type": "boolean"},
+        "original_result_id": {"type": "string"},
+        "valid_until": {"type": "string", "format": "date-time"},
+        "freshness_basis": {"type": "string"}
+      },
+      "additionalProperties": false
+    }
+  }
+}
