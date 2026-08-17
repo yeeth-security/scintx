@@ -1,4 +1,13 @@
-package providers
+// Package stubosv is a stub OSV-style vulnerability provider.
+//
+// It is auto-registered via init() when imported. To enable it, import
+// this package from extensions/providers/all/all.go (auto-generated).
+//
+// To add a new provider, create a new directory under extensions/providers/
+// (e.g. extensions/providers/myprovider/) with a file containing an init()
+// that calls scintx.RegisterProviderFactory("myprovider", func() (...) {...}).
+// Then run `go generate ./extensions/...` to pick it up automatically.
+package stubosv
 
 import (
 	"context"
@@ -11,7 +20,7 @@ import (
 	"github.com/yeeth-security/scintx/internal/scintx"
 )
 
-type StubVulnProvider struct {
+type Provider struct {
 	ManifestDigest string
 }
 
@@ -48,12 +57,20 @@ var stubDB = []vulnRecord{
 	},
 }
 
-func (s *StubVulnProvider) ID() string { return "stub-osv" }
+func init() {
+	scintx.RegisterProviderFactory("stub-osv", func() (scintx.Provider, error) {
+		p := &Provider{}
+		p.ManifestDigest = p.computeDigest()
+		return p, nil
+	})
+}
 
-func (s *StubVulnProvider) Capabilities() scintx.ProviderCapabilities {
+func (s *Provider) ID() string { return "stub-osv" }
+
+func (s *Provider) Capabilities() scintx.ProviderCapabilities {
 	caps := scintx.ProviderCapabilities{
-		SchemaVersion:  "1.0.0",
-		Provider:       scintx.ProviderRef{ID: "stub-osv", Version: "2026.8"},
+		SchemaVersion:   "1.0.0",
+		Provider:        scintx.ProviderRef{ID: "stub-osv", Version: "2026.8"},
 		ManifestVersion: "1",
 		UpdatedAt:       time.Now().UTC(),
 		Capabilities: []scintx.Capability{
@@ -73,26 +90,36 @@ func (s *StubVulnProvider) Capabilities() scintx.ProviderCapabilities {
 			},
 		},
 	}
-	caps.ManifestDigest = s.computeDigest(caps)
+	caps.ManifestDigest = s.computeDigest()
 	return caps
 }
 
-func (s *StubVulnProvider) computeDigest(caps scintx.ProviderCapabilities) string {
+func (s *Provider) computeDigest() string {
+	caps := scintx.ProviderCapabilities{
+		Provider:     scintx.ProviderRef{ID: "stub-osv", Version: "2026.8"},
+		Capabilities: []scintx.Capability{
+			{ID: "vulnerability", Version: "v1",
+				InputProfiles: []scintx.InputProfile{
+					{ID: "purl", Requires: []scintx.Requirement{{Kind: scintx.ReqPurl, Types: []string{"pypi", "npm", "maven"}}}},
+				},
+				FindingTypes: []string{"vulnerability"}},
+		},
+	}
 	b, _ := json.Marshal(caps.Capabilities)
 	h := sha256.Sum256(b)
 	return "sha256:" + hex.EncodeToString(h[:])
 }
 
-func (s *StubVulnProvider) Assess(ctx context.Context, artifact scintx.Artifact, capability scintx.Capability) (*scintx.ProviderResult, error) {
+func (s *Provider) Assess(ctx context.Context, artifact scintx.Artifact, capability scintx.Capability) (*scintx.ProviderResult, error) {
 	started := time.Now().UTC()
 
 	if artifact.PURL == nil {
-		return errorResult("stub-osv", "2026.8", "vulnerability", s.ManifestDigest, started, "normalization_error", "no purl provided"), nil
+		return errorResult("stub-osv", "2026.8", "vulnerability", s.ManifestDigest, started, scintx.ErrNormalization, "no purl provided"), nil
 	}
 
 	canonical, err := scintx.CanonicalPurl(*artifact.PURL)
 	if err != nil {
-		return errorResult("stub-osv", "2026.8", "vulnerability", s.ManifestDigest, started, "normalization_error", "invalid purl"), nil
+		return errorResult("stub-osv", "2026.8", "vulnerability", s.ManifestDigest, started, scintx.ErrNormalization, "invalid purl"), nil
 	}
 
 	var matched []vulnRecord
@@ -146,7 +173,7 @@ func (s *StubVulnProvider) Assess(ctx context.Context, artifact scintx.Artifact,
 	rawDigest := sha256.Sum256(rawJSON)
 
 	return &scintx.ProviderResult{
-		ID:                       "res_" + RandID(),
+		ID:                       "res_" + scintx.RandHex(),
 		SchemaVersion:            "1.0.0",
 		SubmissionID:             "",
 		Provider:                 scintx.ProviderRef{ID: "stub-osv", Version: "2026.8"},
@@ -156,7 +183,7 @@ func (s *StubVulnProvider) Assess(ctx context.Context, artifact scintx.Artifact,
 		Verdict:                  verdict,
 		Findings:                 findings,
 		RawResult: &scintx.ResourceReference{
-			URI:       "urn:scintx:blob:raw_" + RandID(),
+			URI:       "urn:scintx:blob:raw_" + scintx.RandHex(),
 			MediaType: "application/json",
 			Digests:   map[string]string{"sha256": hex.EncodeToString(rawDigest[:])},
 			Format:    "osv",
@@ -167,7 +194,7 @@ func (s *StubVulnProvider) Assess(ctx context.Context, artifact scintx.Artifact,
 func errorResult(providerID, version, capability, manifestDigest string, started time.Time, code scintx.ProviderErrorCode, msg string) *scintx.ProviderResult {
 	finished := time.Now().UTC()
 	return &scintx.ProviderResult{
-		ID:                       "res_" + RandID(),
+		ID:                       "res_" + scintx.RandHex(),
 		SchemaVersion:            "1.0.0",
 		Provider:                 scintx.ProviderRef{ID: providerID, Version: version},
 		Capabilities:             []string{capability + ":v1"},

@@ -8,33 +8,29 @@ import (
 )
 
 type Orchestrator struct {
-	Store    *Store
-	Providers []scintxProvider
-	Policy   *PolicyEngine
-	Emitter  *EventEmitter
+	Store     *Store
+	Providers []Provider
+	Policy    PolicyEngine
+	Emitter   *EventEmitter
 }
 
-type scintxProvider struct {
-	Prov Provider
-	Impl interface {
-		ID() string
-		Capabilities() ProviderCapabilities
-		Assess(ctx context.Context, artifact Artifact, capability Capability) (*ProviderResult, error)
-	}
-}
-
-func NewOrchestrator(store *Store, policy *PolicyEngine, emitter *EventEmitter) *Orchestrator {
+func NewOrchestrator(store *Store, policy PolicyEngine, emitter *EventEmitter) *Orchestrator {
 	return &Orchestrator{Store: store, Policy: policy, Emitter: emitter}
 }
 
-func (o *Orchestrator) RegisterProvider(p interface {
-	ID() string
-	Capabilities() ProviderCapabilities
-	Assess(ctx context.Context, artifact Artifact, capability Capability) (*ProviderResult, error)
-}) {
-	caps := p.Capabilities()
-	o.Store.RegisterProvider(ProviderEntry{ID: p.ID(), Name: caps.Provider.ID, Capabilities: caps})
-	o.Providers = append(o.Providers, scintxProvider{Impl: p})
+// LoadProvidersFromRegistry instantiates all registered providers and
+// registers their capability manifests with the store. Called once at startup.
+func (o *Orchestrator) LoadProvidersFromRegistry() error {
+	providers, err := LoadProviders()
+	if err != nil {
+		return fmt.Errorf("loading providers: %w", err)
+	}
+	for _, p := range providers {
+		caps := p.Capabilities()
+		o.Store.RegisterProvider(ProviderEntry{ID: p.ID(), Name: caps.Provider.ID, Capabilities: caps})
+		o.Providers = append(o.Providers, p)
+	}
+	return nil
 }
 
 func (o *Orchestrator) Process(ctx context.Context, sub *Submission) error {
@@ -51,28 +47,23 @@ func (o *Orchestrator) Process(ctx context.Context, sub *Submission) error {
 		}
 	}
 
-	requested := sub.RequestedCapabilities
 	type selectedProvider struct {
 		ProvID    string
 		Capability Capability
-		Impl      interface {
-			ID() string
-			Capabilities() ProviderCapabilities
-			Assess(ctx context.Context, artifact Artifact, capability Capability) (*ProviderResult, error)
-		}
+		Impl      Provider
 	}
 
 	var selected []selectedProvider
-	for _, reqCap := range requested {
-		for _, sp := range o.Providers {
-			caps := sp.Impl.Capabilities()
+	for _, reqCap := range sub.RequestedCapabilities {
+		for _, p := range o.Providers {
+			caps := p.Capabilities()
 			for _, c := range caps.Capabilities {
 				if c.ID != reqCap {
 					continue
 				}
 				res := CapabilityEligible(&artifact, &c)
 				if res.Eligible {
-					selected = append(selected, selectedProvider{ProvID: sp.Impl.ID(), Capability: c, Impl: sp.Impl})
+					selected = append(selected, selectedProvider{ProvID: p.ID(), Capability: c, Impl: p})
 				}
 			}
 		}
@@ -107,7 +98,7 @@ func (o *Orchestrator) Process(ctx context.Context, sub *Submission) error {
 				started := time.Now().UTC()
 				finished := started
 				res = &ProviderResult{
-					ID: "res_" + randHex(),
+					ID: "res_" + RandHex(),
 					Execution: Execution{Status: ExecutionError, StartedAt: started, FinishedAt: finished,
 						Error: &ProviderError{Code: ErrTransport, Message: err.Error()}},
 				}
@@ -151,7 +142,8 @@ func (o *Orchestrator) Process(ctx context.Context, sub *Submission) error {
 		return nil
 	}
 
-	decision, err := o.Policy.Evaluate(sub)
+	results := o.Store.GetResultsForSubmission(sub.ID)
+	decision, err := o.Policy.Evaluate(sub, results)
 	if err != nil {
 		reason := CompletionFailed
 		sub.Status = SubmissionFailed
@@ -211,4 +203,3 @@ func (o *Orchestrator) Resume(ctx context.Context, subID string) error {
 	o.Store.PutSubmission(sub)
 	return o.Process(ctx, sub)
 }
-

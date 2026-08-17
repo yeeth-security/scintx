@@ -2,7 +2,6 @@ package scintx
 
 import (
 	"sync"
-	"time"
 )
 
 type Store struct {
@@ -139,5 +138,3 @@ func (s *Store) SnapshotCapabilities(providerID string, caps ProviderCapabilitie
 	defer s.mu.Unlock()
 	s.capSnapshots[providerID] = caps
 }
-
-var _ = time.Now

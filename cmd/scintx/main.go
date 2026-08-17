@@ -4,7 +4,8 @@ import (
 	"log"
 	"os"
 
-	"github.com/yeeth-security/scintx/internal/providers"
+	_ "github.com/yeeth-security/scintx/extensions/policies/all"   // registers policy engines via init()
+	_ "github.com/yeeth-security/scintx/extensions/providers/all" // registers providers via init()
 	"github.com/yeeth-security/scintx/internal/scintx"
 	"github.com/yeeth-security/scintx/internal/server"
 )
@@ -12,13 +13,26 @@ import (
 func main() {
 	store := scintx.NewStore()
 	emitter := scintx.NewEventEmitter("https://scintx.example", store)
-	policy := scintx.DefaultPolicy()
-	scintx.SetStoreResultLookup(store.GetResult)
+
+	// Load the default policy engine from the registry.
+	// The import of extensions/policies/all triggers init() registration.
+	policy, err := scintx.LoadPolicyEngine("default")
+	if err != nil {
+		log.Fatalf("failed to load policy engine: %v", err)
+	}
+
 	orch := scintx.NewOrchestrator(store, policy, emitter)
 
-	stub := &providers.StubVulnProvider{ManifestDigest: ""}
-	stub.ManifestDigest = stub.Capabilities().ManifestDigest
-	orch.RegisterProvider(stub)
+	// Load all registered providers from the registry.
+	// The import of extensions/providers/all triggers init() registration.
+	if err := orch.LoadProvidersFromRegistry(); err != nil {
+		log.Fatalf("failed to load providers: %v", err)
+	}
+
+	log.Printf("SCINTX started: %d provider(s) registered", len(orch.Providers))
+	for _, p := range orch.Providers {
+		log.Printf("  provider: %s", p.ID())
+	}
 
 	srv := server.New(store, orch, emitter)
 	addr := os.Getenv("SCINTX_ADDR")

@@ -9,7 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yeeth-security/scintx/internal/providers"
+	_ "github.com/yeeth-security/scintx/extensions/policies/all"   // registers policy engines
+	_ "github.com/yeeth-security/scintx/extensions/providers/all"  // registers providers
 	"github.com/yeeth-security/scintx/internal/scintx"
 	"github.com/yeeth-security/scintx/internal/server"
 )
@@ -18,13 +19,16 @@ func setup(t *testing.T) (*server.Server, *scintx.Store) {
 	t.Helper()
 	store := scintx.NewStore()
 	emitter := scintx.NewEventEmitter("https://scintx.example", store)
-	policy := scintx.DefaultPolicy()
-	scintx.SetStoreResultLookup(store.GetResult)
-	orch := scintx.NewOrchestrator(store, policy, emitter)
 
-	stub := &providers.StubVulnProvider{}
-	stub.ManifestDigest = stub.Capabilities().ManifestDigest
-	orch.RegisterProvider(stub)
+	policy, err := scintx.LoadPolicyEngine("default")
+	if err != nil {
+		t.Fatalf("failed to load policy engine: %v", err)
+	}
+
+	orch := scintx.NewOrchestrator(store, policy, emitter)
+	if err := orch.LoadProvidersFromRegistry(); err != nil {
+		t.Fatalf("failed to load providers: %v", err)
+	}
 
 	srv := server.New(store, orch, emitter)
 	return srv, store
@@ -286,14 +290,21 @@ func TestE2E_ProviderListing(t *testing.T) {
 		} `json:"providers"`
 	}
 	json.Unmarshal(rr.Body.Bytes(), &resp)
-	if len(resp.Providers) != 1 {
-		t.Fatalf("expected 1 provider, got %d", len(resp.Providers))
+	if len(resp.Providers) < 1 {
+		t.Fatalf("expected at least 1 provider, got %d", len(resp.Providers))
 	}
-	if resp.Providers[0].ID != "stub-osv" {
-		t.Fatalf("expected stub-osv, got %s", resp.Providers[0].ID)
+	// Verify stub-osv is present (auto-discovered from extensions/providers/stub-osv/)
+	found := false
+	for _, p := range resp.Providers {
+		if p.ID == "stub-osv" {
+			found = true
+			if len(p.Capabilities) != 1 || p.Capabilities[0] != "vulnerability:v1" {
+				t.Fatalf("expected vulnerability:v1, got %+v", p.Capabilities)
+			}
+		}
 	}
-	if len(resp.Providers[0].Capabilities) != 1 || resp.Providers[0].Capabilities[0] != "vulnerability:v1" {
-		t.Fatalf("expected vulnerability:v1, got %+v", resp.Providers[0].Capabilities)
+	if !found {
+		t.Fatalf("stub-osv provider not auto-discovered; got %+v", resp.Providers)
 	}
 }
 
@@ -388,6 +399,75 @@ func TestE2E_CapabilityMatching(t *testing.T) {
 	}
 	if len(caps.Capabilities[0].InputProfiles) != 1 {
 		t.Fatalf("expected 1 input profile, got %d", len(caps.Capabilities[0].InputProfiles))
+	}
+}
+
+func TestE2E_AutoDiscoveredSecondProvider(t *testing.T) {
+	srv, _ := setup(t)
+	rr := doRequest(t, srv, "GET", "/v1/providers", nil)
+	if rr.Code != 200 {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	var resp struct {
+		Providers []struct {
+			ID           string   `json:"id"`
+			Capabilities []string `json:"capabilities"`
+		} `json:"providers"`
+	}
+	json.Unmarshal(rr.Body.Bytes(), &resp)
+	found := false
+	for _, p := range resp.Providers {
+		if p.ID == "stub-secrets" {
+			found = true
+			hasSecrets := false
+			for _, c := range p.Capabilities {
+				if c == "secrets:v1" {
+					hasSecrets = true
+				}
+			}
+			if !hasSecrets {
+				t.Fatalf("stub-secrets missing secrets:v1 capability; got %+v", p.Capabilities)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("stub-secrets provider not auto-discovered; got %+v", resp.Providers)
+	}
+
+	rr2 := doRequest(t, srv, "GET", "/v1/providers/stub-secrets/capabilities", nil)
+	if rr2.Code != 200 {
+		t.Fatalf("expected 200 for stub-secrets capabilities, got %d", rr2.Code)
+	}
+}
+
+func TestE2E_ContentDigestArtifact_SelectsSecretsProvider(t *testing.T) {
+	srv, _ := setup(t)
+	purl := "pkg:pypi/some-pkg@1.0.0"
+	digests := map[string]string{"sha256": "abc123"}
+	contentRef := map[string]any{
+		"uri":        "urn:scintx:blob:abc123",
+		"media_type": "application/octet-stream",
+	}
+	rr := doRequest(t, srv, "POST", "/v1/submissions", map[string]any{
+		"schema_version": "1.0.0",
+		"artifact": map[string]any{
+			"purl":        purl,
+			"digests":     digests,
+			"content_ref": contentRef,
+		},
+		"requested_capabilities": []string{"secrets"},
+	})
+	if rr.Code != 202 {
+		t.Fatalf("expected 202, got %d: %s", rr.Code, rr.Body.String())
+	}
+	var sub scintx.Submission
+	json.Unmarshal(rr.Body.Bytes(), &sub)
+	completed := waitForStatus(t, srv, sub.ID, scintx.SubmissionCompleted, 5*time.Second)
+	if *completed.CompletionReason != scintx.CompletionFindingsOnly {
+		t.Fatalf("expected findings_only, got %s", *completed.CompletionReason)
+	}
+	if len(completed.ResultIDs) != 1 {
+		t.Fatalf("expected 1 result (secrets provider), got %d", len(completed.ResultIDs))
 	}
 }
 
