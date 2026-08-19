@@ -1,0 +1,3 @@
+# Python deps for scripts/validate-schemas.py (JSON Schema 2020-12).
+# jsonschema pulls in referencing.
+jsonschema>=4.22.0

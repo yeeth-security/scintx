@@ -13,6 +13,11 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Schema Python deps
+        run: pip install -r scripts/requirements-schemas.txt
       - name: Check
         run: |
           chmod +x scripts/*.sh
