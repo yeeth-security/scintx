@@ -4,12 +4,13 @@
 // Package policiesall imports all policy engine extensions so their init() registrations run.
 //
 // To add a new extension of this kind:
-//   1. Create a directory under extensions/policies/<name>/ with a .go file containing init() registration.
-//   2. Run: go generate ./extensions/...
-//   3. The new extension is automatically picked up on next build.
+//  1. Create a directory under extensions/policies/<name>/ with a .go file containing init() registration.
+//  2. Run: go generate ./extensions/...
+//  3. The new extension is automatically picked up on next build.
 package policiesall
 
 import (
-	_ "github.com/yeeth-security/scintx/internal/scintx" // ensure registry is loaded
-	_ "github.com/yeeth-security/scintx/extensions/policies/default"
+	_ "github.com/yeeth-security/scintx/api" // ensure registry is loaded
+	_ "github.com/yeeth-security/scintx/extensions/policies/example"
+	_ "github.com/yeeth-security/scintx/extensions/policies/yaml"
 )

@@ -4,3 +4,8 @@ dist/
 uploads/
 /bin/scintx
 bin/
+.env
+data/
+*.db
+.tmp/
+.tmp-demo/

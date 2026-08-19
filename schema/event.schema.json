@@ -22,6 +22,7 @@
         "org.eclipse.scintx.provider.result.error.v1",
         "org.eclipse.scintx.provider.result.timeout.v1",
         "org.eclipse.scintx.policy-decision.created.v1",
+        "org.eclipse.scintx.policy-decision.resolved.v1",
         "org.eclipse.scintx.delivery.dead_lettered.v1"
       ]
     },

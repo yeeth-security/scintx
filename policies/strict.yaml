@@ -1,0 +1,28 @@
+# Stricter gate: deny on any fail verdict with an affected finding.
+# Use with: "policy_ref": "strict"
+
+apiVersion: scintx.policy/v1
+kind: Policy
+
+metadata:
+  id: strict
+  version: "1"
+  description: Deny any affected finding; review provider errors; defer unknowns.
+
+spec:
+  on_timeout: deny
+  on_error: review
+  on_missing_verdict: review
+  verdicts:
+    pass: allow
+    warn: deny
+    fail: deny
+    unknown: defer
+  findings:
+    - when:
+        assessment: affected
+      decision: deny
+      reason_code: affected_finding
+      message: "Affected finding {{finding_id}} blocked by strict policy"
+  defer:
+    resume_after: 30m

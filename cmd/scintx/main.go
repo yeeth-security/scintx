@@ -1,46 +1,37 @@
 package main
 
 import (
-	"log"
+	"fmt"
 	"os"
-
-	_ "github.com/yeeth-security/scintx/extensions/policies/all"   // registers policy engines via init()
-	_ "github.com/yeeth-security/scintx/extensions/providers/all" // registers providers via init()
-	"github.com/yeeth-security/scintx/internal/scintx"
-	"github.com/yeeth-security/scintx/internal/server"
 )
 
 func main() {
-	store := scintx.NewStore()
-	emitter := scintx.NewEventEmitter("https://scintx.example", store)
-
-	// Load the default policy engine from the registry.
-	// The import of extensions/policies/all triggers init() registration.
-	policy, err := scintx.LoadPolicyEngine("default")
-	if err != nil {
-		log.Fatalf("failed to load policy engine: %v", err)
+	args := os.Args[1:]
+	if len(args) == 0 {
+		runServe()
+		return
 	}
-
-	orch := scintx.NewOrchestrator(store, policy, emitter)
-
-	// Load all registered providers from the registry.
-	// The import of extensions/providers/all triggers init() registration.
-	if err := orch.LoadProvidersFromRegistry(); err != nil {
-		log.Fatalf("failed to load providers: %v", err)
+	switch args[0] {
+	case "serve":
+		runServe()
+	case "auth":
+		os.Exit(runAuth(args[1:]))
+	case "help", "-h", "--help":
+		printRootUsage()
+	default:
+		fmt.Fprintf(os.Stderr, "unknown command %q\n", args[0])
+		printRootUsage()
+		os.Exit(2)
 	}
+}
 
-	log.Printf("SCINTX started: %d provider(s) registered", len(orch.Providers))
-	for _, p := range orch.Providers {
-		log.Printf("  provider: %s", p.ID())
-	}
+func printRootUsage() {
+	fmt.Fprintf(os.Stderr, `Usage:
+  scintx              Start the HTTP gateway (same as: scintx serve)
+  scintx serve        Start the HTTP gateway
+  scintx auth …       Manage outbound provider credentials
+  scintx help         Show this help
 
-	srv := server.New(store, orch, emitter)
-	addr := os.Getenv("SCINTX_ADDR")
-	if addr == "" {
-		addr = ":8080"
-	}
-	log.Printf("SCINTX listening on %s", addr)
-	if err := srv.Start(addr); err != nil {
-		log.Fatal(err)
-	}
+Run "scintx auth help" for credential commands.
+`)
 }

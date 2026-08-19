@@ -111,6 +111,69 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /v1/submissions/{id}/results:
+    get:
+      tags: [Submissions]
+      operationId: listSubmissionResults
+      summary: List provider results for a submission
+      parameters:
+        - $ref: '#/components/parameters/SubmissionId'
+      responses:
+        '200':
+          description: Provider results
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [results]
+                properties:
+                  results:
+                    type: array
+                    items:
+                      $ref: '../schema/provider-result.schema.json'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /v1/results/{id}:
+    get:
+      tags: [Submissions]
+      operationId: getResult
+      summary: Get a provider result by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: Provider result
+          content:
+            application/json:
+              schema:
+                $ref: '../schema/provider-result.schema.json'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /v1/decisions/{id}:
+    get:
+      tags: [Submissions]
+      operationId: getDecision
+      summary: Get a policy decision by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: Policy decision
+          content:
+            application/json:
+              schema:
+                $ref: '../schema/policy-decision.schema.json'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /v1/submissions/{id}/resume:
     post:
       tags: [Submissions]
@@ -132,6 +195,49 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+
+  /v1/submissions/{id}/adjudicate:
+    post:
+      tags: [Submissions]
+      operationId: adjudicateSubmission
+      summary: Share a consumer final resolution back to the gateway
+      description: |
+        Resolution happens wherever the consumer plugs SCINTX results
+        (registry UI, ticketing, CI gate, etc.). This endpoint records that
+        shared allow/deny outcome on the gateway for audit and webhooks.
+
+        The prior machine PolicyDecision is kept immutable. A new decision is
+        stored with extensions.origin=consumer and prior_decision_id, and
+        submission.decision_id is updated to the new id. Emits
+        org.eclipse.scintx.policy-decision.resolved.v1.
+      parameters:
+        - $ref: '#/components/parameters/SubmissionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../schema/adjudicate-request.schema.json'
+            examples:
+              allowFromRegistryUI:
+                value:
+                  decision: allow
+                  actor: alice@example.com
+                  source: registry-ui
+                  rationale: Accepted risk until lodash>=4.17.21
+      responses:
+        '201':
+          description: Consumer resolution recorded
+          content:
+            application/json:
+              schema:
+                $ref: '../schema/policy-decision.schema.json'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
 
   /v1/providers:
     get:
@@ -254,7 +360,12 @@ paths:
       tags: [Events]
       operationId: listEvents
       summary: List emitted CloudEvents
-      description: Returns the in-memory event log. In production, events are delivered via signed webhooks (RFC 9421 + RFC 9530); this endpoint is for debugging/conformance.
+      description: |
+        Returns the in-process event log for debugging/conformance.
+        Production clients should subscribe via signed webhooks
+        (SCINTX_WEBHOOK_URL): CloudEvents POST with Content-Digest (RFC 9530)
+        and X-Scintx-Signature HMAC. Full inbound RFC 9421 API auth is a
+        separate profile.
       parameters:
         - name: subject
           in: query

@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Git pre-commit entrypoint (core.hooksPath → .githooks/).
+# Delegates to scripts/pre-commit.sh so the logic stays versioned and testable.
+
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+exec "${ROOT}/scripts/pre-commit.sh"

@@ -202,6 +202,32 @@ validate("event.schema.json", {
 
 validate("event.schema.json", {
     "specversion": "1.0",
+    "id": "evt_resolved",
+    "source": "https://scintx.example",
+    "type": "org.eclipse.scintx.policy-decision.resolved.v1",
+    "subject": "sub_1",
+    "time": "2026-08-17T14:14:04Z",
+    "data": {
+        "decision": "allow",
+        "decision_id": "dec_2",
+        "prior_decision_id": "dec_1",
+        "source": "registry-ui"
+    }
+}, "cloudevent policy-decision.resolved")
+
+validate("adjudicate-request.schema.json", {
+    "decision": "allow",
+    "actor": "alice@example.com",
+    "source": "registry-ui",
+    "rationale": "Accepted risk until lodash>=4.17.21"
+}, "adjudicate allow from consumer")
+
+validate("adjudicate-request.schema.json", {
+    "decision": "review"
+}, "adjudicate review not allowed (should fail)", should_fail=True)
+
+validate("event.schema.json", {
+    "specversion": "1.0",
     "id": "evt_2",
     "source": "https://scintx.example",
     "type": "org.eclipse.scintx.unknown.event.v1",

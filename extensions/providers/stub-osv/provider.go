@@ -5,7 +5,7 @@
 //
 // To add a new provider, create a new directory under extensions/providers/
 // (e.g. extensions/providers/myprovider/) with a file containing an init()
-// that calls scintx.RegisterProviderFactory("myprovider", func() (...) {...}).
+// that calls api.RegisterProviderFactory("myprovider", func() (...) {...}).
 // Then run `go generate ./extensions/...` to pick it up automatically.
 package stubosv
 
@@ -17,7 +17,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/yeeth-security/scintx/internal/scintx"
+	"github.com/yeeth-security/scintx/api"
 )
 
 type Provider struct {
@@ -58,7 +58,7 @@ var stubDB = []vulnRecord{
 }
 
 func init() {
-	scintx.RegisterProviderFactory("stub-osv", func() (scintx.Provider, error) {
+	api.RegisterProviderFactory("stub-osv", func() (api.Provider, error) {
 		p := &Provider{}
 		p.ManifestDigest = p.computeDigest()
 		return p, nil
@@ -67,21 +67,21 @@ func init() {
 
 func (s *Provider) ID() string { return "stub-osv" }
 
-func (s *Provider) Capabilities() scintx.ProviderCapabilities {
-	caps := scintx.ProviderCapabilities{
+func (s *Provider) Capabilities() api.ProviderCapabilities {
+	caps := api.ProviderCapabilities{
 		SchemaVersion:   "1.0.0",
-		Provider:        scintx.ProviderRef{ID: "stub-osv", Version: "2026.8"},
+		Provider:        api.ProviderRef{ID: "stub-osv", Version: "2026.8"},
 		ManifestVersion: "1",
 		UpdatedAt:       time.Now().UTC(),
-		Capabilities: []scintx.Capability{
+		Capabilities: []api.Capability{
 			{
 				ID:      "vulnerability",
 				Version: "v1",
-				InputProfiles: []scintx.InputProfile{
+				InputProfiles: []api.InputProfile{
 					{
 						ID: "purl",
-						Requires: []scintx.Requirement{
-							{Kind: scintx.ReqPurl, Types: []string{"pypi", "npm", "maven"}},
+						Requires: []api.Requirement{
+							{Kind: api.ReqPurl, Types: []string{"pypi", "npm", "maven"}},
 						},
 					},
 				},
@@ -95,12 +95,12 @@ func (s *Provider) Capabilities() scintx.ProviderCapabilities {
 }
 
 func (s *Provider) computeDigest() string {
-	caps := scintx.ProviderCapabilities{
-		Provider:     scintx.ProviderRef{ID: "stub-osv", Version: "2026.8"},
-		Capabilities: []scintx.Capability{
+	caps := api.ProviderCapabilities{
+		Provider: api.ProviderRef{ID: "stub-osv", Version: "2026.8"},
+		Capabilities: []api.Capability{
 			{ID: "vulnerability", Version: "v1",
-				InputProfiles: []scintx.InputProfile{
-					{ID: "purl", Requires: []scintx.Requirement{{Kind: scintx.ReqPurl, Types: []string{"pypi", "npm", "maven"}}}},
+				InputProfiles: []api.InputProfile{
+					{ID: "purl", Requires: []api.Requirement{{Kind: api.ReqPurl, Types: []string{"pypi", "npm", "maven"}}}},
 				},
 				FindingTypes: []string{"vulnerability"}},
 		},
@@ -110,58 +110,58 @@ func (s *Provider) computeDigest() string {
 	return "sha256:" + hex.EncodeToString(h[:])
 }
 
-func (s *Provider) Assess(ctx context.Context, artifact scintx.Artifact, capability scintx.Capability) (*scintx.ProviderResult, error) {
+func (s *Provider) Assess(ctx context.Context, artifact api.Artifact, capability api.Capability) (*api.ProviderResult, error) {
 	started := time.Now().UTC()
 
 	if artifact.PURL == nil {
-		return errorResult("stub-osv", "2026.8", "vulnerability", s.ManifestDigest, started, scintx.ErrNormalization, "no purl provided"), nil
+		return errorResult("stub-osv", "2026.8", "vulnerability", s.ManifestDigest, started, api.ErrNormalization, "no purl provided"), nil
 	}
 
-	canonical, err := scintx.CanonicalPurl(*artifact.PURL)
+	canonical, err := api.CanonicalPurl(*artifact.PURL)
 	if err != nil {
-		return errorResult("stub-osv", "2026.8", "vulnerability", s.ManifestDigest, started, scintx.ErrNormalization, "invalid purl"), nil
+		return errorResult("stub-osv", "2026.8", "vulnerability", s.ManifestDigest, started, api.ErrNormalization, "invalid purl"), nil
 	}
 
 	var matched []vulnRecord
 	for _, r := range stubDB {
-		rc, _ := scintx.CanonicalPurl(r.PURL)
+		rc, _ := api.CanonicalPurl(r.PURL)
 		if rc == canonical {
 			matched = append(matched, r)
 		}
 	}
 
-	var findings []scintx.Finding
-	var drivenBy []scintx.VerdictDerivationEntry
+	var findings []api.Finding
+	var drivenBy []api.VerdictDerivationEntry
 	for _, r := range matched {
 		score := r.CVSSScore
 		level := r.CVSSLevel
-		f := scintx.Finding{
+		f := api.Finding{
 			ID:          r.ID,
 			Type:        "vulnerability",
 			Title:       r.Title,
 			Description: r.Description,
-			Identifiers: []scintx.TypedIdentifier{
-				{Scheme: "OSV", Value: r.ID, Relation: scintx.RelNone},
-				{Scheme: "CVE", Value: r.CVE, Relation: scintx.RelAlias},
+			Identifiers: []api.TypedIdentifier{
+				{Scheme: "OSV", Value: r.ID, Relation: api.RelNone},
+				{Scheme: "CVE", Value: r.CVE, Relation: api.RelAlias},
 			},
-			Subjects: []scintx.ArtifactRef{{PURL: &canonical}},
-			Severity: []scintx.SeverityObservation{
+			Subjects: []api.ArtifactRef{{PURL: &canonical}},
+			Severity: []api.SeverityObservation{
 				{Scheme: "CVSS", Version: "4.0", Score: &score, Level: level, Vector: r.CVSSVector, Source: "provider"},
 			},
-			Weaknesses: []scintx.CweRef{{Scheme: "CWE", ID: r.CWE}},
-			Assessment: &scintx.Assessment{Status: scintx.AssessAffected},
+			Weaknesses: []api.CweRef{{Scheme: "CWE", ID: r.CWE}},
+			Assessment: &api.Assessment{Status: api.AssessAffected},
 		}
 		findings = append(findings, f)
-		drivenBy = append(drivenBy, scintx.VerdictDerivationEntry{FindingID: r.ID, Weight: "primary"})
+		drivenBy = append(drivenBy, api.VerdictDerivationEntry{FindingID: r.ID, Weight: "primary"})
 	}
 
-	verdict := &scintx.Verdict{Value: scintx.VerdictPass, Origin: scintx.VerdictOriginProvider, Rule: "stub-osv.zero_findings_means_pass"}
+	verdict := &api.Verdict{Value: api.VerdictPass, Origin: api.VerdictOriginProvider, Rule: "stub-osv.zero_findings_means_pass"}
 	if len(findings) > 0 {
-		verdict = &scintx.Verdict{
-			Value:  scintx.VerdictFail,
-			Origin: scintx.VerdictOriginProvider,
+		verdict = &api.Verdict{
+			Value:  api.VerdictFail,
+			Origin: api.VerdictOriginProvider,
 			Rule:   "stub-osv.any_applicable_finding_means_fail",
-			Derivation: &scintx.VerdictDerivation{
+			Derivation: &api.VerdictDerivation{
 				DrivenBy: drivenBy,
 				Summary:  fmt.Sprintf("%d applicable vulnerability finding(s)", len(findings)),
 			},
@@ -172,18 +172,18 @@ func (s *Provider) Assess(ctx context.Context, artifact scintx.Artifact, capabil
 	rawJSON, _ := json.Marshal(map[string]any{"source": "stub-db", "matched_count": len(matched)})
 	rawDigest := sha256.Sum256(rawJSON)
 
-	return &scintx.ProviderResult{
-		ID:                       "res_" + scintx.RandHex(),
+	return &api.ProviderResult{
+		ID:                       "res_" + api.RandHex(),
 		SchemaVersion:            "1.0.0",
 		SubmissionID:             "",
-		Provider:                 scintx.ProviderRef{ID: "stub-osv", Version: "2026.8"},
+		Provider:                 api.ProviderRef{ID: "stub-osv", Version: "2026.8"},
 		Capabilities:             []string{"vulnerability:v1"},
 		CapabilityManifestDigest: s.ManifestDigest,
-		Execution:                scintx.Execution{Status: scintx.ExecutionCompleted, StartedAt: started, FinishedAt: finished},
+		Execution:                api.Execution{Status: api.ExecutionCompleted, StartedAt: started, FinishedAt: finished},
 		Verdict:                  verdict,
 		Findings:                 findings,
-		RawResult: &scintx.ResourceReference{
-			URI:       "urn:scintx:blob:raw_" + scintx.RandHex(),
+		RawResult: &api.ResourceReference{
+			URI:       "urn:scintx:blob:raw_" + api.RandHex(),
 			MediaType: "application/json",
 			Digests:   map[string]string{"sha256": hex.EncodeToString(rawDigest[:])},
 			Format:    "osv",
@@ -191,19 +191,19 @@ func (s *Provider) Assess(ctx context.Context, artifact scintx.Artifact, capabil
 	}, nil
 }
 
-func errorResult(providerID, version, capability, manifestDigest string, started time.Time, code scintx.ProviderErrorCode, msg string) *scintx.ProviderResult {
+func errorResult(providerID, version, capability, manifestDigest string, started time.Time, code api.ProviderErrorCode, msg string) *api.ProviderResult {
 	finished := time.Now().UTC()
-	return &scintx.ProviderResult{
-		ID:                       "res_" + scintx.RandHex(),
+	return &api.ProviderResult{
+		ID:                       "res_" + api.RandHex(),
 		SchemaVersion:            "1.0.0",
-		Provider:                 scintx.ProviderRef{ID: providerID, Version: version},
+		Provider:                 api.ProviderRef{ID: providerID, Version: version},
 		Capabilities:             []string{capability + ":v1"},
 		CapabilityManifestDigest: manifestDigest,
-		Execution: scintx.Execution{
-			Status:     scintx.ExecutionError,
+		Execution: api.Execution{
+			Status:     api.ExecutionError,
 			StartedAt:  started,
 			FinishedAt: finished,
-			Error:      &scintx.ProviderError{Code: code, Message: msg},
+			Error:      &api.ProviderError{Code: code, Message: msg},
 		},
 	}
 }

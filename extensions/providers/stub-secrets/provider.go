@@ -9,7 +9,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/yeeth-security/scintx/internal/scintx"
+	"github.com/yeeth-security/scintx/api"
 )
 
 type Provider struct {
@@ -17,7 +17,7 @@ type Provider struct {
 }
 
 func init() {
-	scintx.RegisterProviderFactory("stub-secrets", func() (scintx.Provider, error) {
+	api.RegisterProviderFactory("stub-secrets", func() (api.Provider, error) {
 		p := &Provider{}
 		p.ManifestDigest = p.computeDigest()
 		return p, nil
@@ -26,22 +26,22 @@ func init() {
 
 func (s *Provider) ID() string { return "stub-secrets" }
 
-func (s *Provider) Capabilities() scintx.ProviderCapabilities {
-	caps := scintx.ProviderCapabilities{
+func (s *Provider) Capabilities() api.ProviderCapabilities {
+	caps := api.ProviderCapabilities{
 		SchemaVersion:   "1.0.0",
-		Provider:        scintx.ProviderRef{ID: "stub-secrets", Version: "0.1"},
+		Provider:        api.ProviderRef{ID: "stub-secrets", Version: "0.1"},
 		ManifestVersion: "1",
 		UpdatedAt:       time.Now().UTC(),
-		Capabilities: []scintx.Capability{
+		Capabilities: []api.Capability{
 			{
 				ID:      "secrets",
 				Version: "v1",
-				InputProfiles: []scintx.InputProfile{
+				InputProfiles: []api.InputProfile{
 					{
 						ID: "content-required",
-						Requires: []scintx.Requirement{
-							{Kind: scintx.ReqContent},
-							{Kind: scintx.ReqDigest, Algorithms: []string{"sha256"}},
+						Requires: []api.Requirement{
+							{Kind: api.ReqContent},
+							{Kind: api.ReqDigest, Algorithms: []string{"sha256"}},
 						},
 					},
 				},
@@ -54,12 +54,12 @@ func (s *Provider) Capabilities() scintx.ProviderCapabilities {
 }
 
 func (s *Provider) computeDigest() string {
-	caps := scintx.ProviderCapabilities{
-		Provider: scintx.ProviderRef{ID: "stub-secrets", Version: "0.1"},
-		Capabilities: []scintx.Capability{
+	caps := api.ProviderCapabilities{
+		Provider: api.ProviderRef{ID: "stub-secrets", Version: "0.1"},
+		Capabilities: []api.Capability{
 			{ID: "secrets", Version: "v1",
-				InputProfiles: []scintx.InputProfile{
-					{ID: "content-required", Requires: []scintx.Requirement{{Kind: scintx.ReqContent}, {Kind: scintx.ReqDigest, Algorithms: []string{"sha256"}}}},
+				InputProfiles: []api.InputProfile{
+					{ID: "content-required", Requires: []api.Requirement{{Kind: api.ReqContent}, {Kind: api.ReqDigest, Algorithms: []string{"sha256"}}}},
 				},
 				FindingTypes: []string{"secret"}},
 		},
@@ -69,16 +69,16 @@ func (s *Provider) computeDigest() string {
 	return "sha256:" + hex.EncodeToString(h[:])
 }
 
-func (s *Provider) Assess(ctx context.Context, artifact scintx.Artifact, capability scintx.Capability) (*scintx.ProviderResult, error) {
+func (s *Provider) Assess(ctx context.Context, artifact api.Artifact, capability api.Capability) (*api.ProviderResult, error) {
 	started := time.Now().UTC()
 	finished := time.Now().UTC()
-	return &scintx.ProviderResult{
-		ID:                       "res_" + scintx.RandHex(),
+	return &api.ProviderResult{
+		ID:                       "res_" + api.RandHex(),
 		SchemaVersion:            "1.0.0",
-		Provider:                 scintx.ProviderRef{ID: "stub-secrets", Version: "0.1"},
+		Provider:                 api.ProviderRef{ID: "stub-secrets", Version: "0.1"},
 		Capabilities:             []string{"secrets:v1"},
 		CapabilityManifestDigest: s.ManifestDigest,
-		Execution:                scintx.Execution{Status: scintx.ExecutionCompleted, StartedAt: started, FinishedAt: finished},
-		Verdict:                  &scintx.Verdict{Value: scintx.VerdictPass, Origin: scintx.VerdictOriginProvider, Rule: "stub-secrets.no_secrets_found"},
+		Execution:                api.Execution{Status: api.ExecutionCompleted, StartedAt: started, FinishedAt: finished},
+		Verdict:                  &api.Verdict{Value: api.VerdictPass, Origin: api.VerdictOriginProvider, Rule: "stub-secrets.no_secrets_found"},
 	}, nil
 }

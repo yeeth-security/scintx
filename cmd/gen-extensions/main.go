@@ -40,12 +40,6 @@ var kinds = []extensionKind{
 		packageName: "policiesall",
 		description: "all policy engine extensions",
 	},
-	{
-		dir:         "extensions/registries",
-		importRoot:  "github.com/yeeth-security/scintx/extensions/registries",
-		packageName: "registriesall",
-		description: "all registry connector extensions",
-	},
 }
 
 func main() {
@@ -92,11 +86,12 @@ func generate(k extensionKind) error {
 		return fmt.Errorf("directory does not exist: %s", k.dir)
 	}
 
-	// Relative dir for comments
+	// Relative dir for comments (always slash-separated for stable, portable docs).
 	relDir, _ := filepath.Rel(repoRoot, k.dir)
 	if relDir == "" {
 		relDir = k.dir
 	}
+	relDir = filepath.ToSlash(relDir)
 
 	var pkgs []string
 	err := filepath.WalkDir(k.dir, func(path string, d fs.DirEntry, err error) error {
@@ -150,16 +145,16 @@ func generate(k extensionKind) error {
 	fmt.Fprintf(&b, "// Package %s imports %s so their init() registrations run.\n", k.packageName, k.description)
 	fmt.Fprintf(&b, "//\n")
 	fmt.Fprintf(&b, "// To add a new extension of this kind:\n")
-	fmt.Fprintf(&b, "//   1. Create a directory under %s/<name>/ with a .go file containing init() registration.\n", relDir)
-	fmt.Fprintf(&b, "//   2. Run: go generate ./extensions/...\n")
-	fmt.Fprintf(&b, "//   3. The new extension is automatically picked up on next build.\n")
+	fmt.Fprintf(&b, "//  1. Create a directory under %s/<name>/ with a .go file containing init() registration.\n", relDir)
+	fmt.Fprintf(&b, "//  2. Run: go generate ./extensions/...\n")
+	fmt.Fprintf(&b, "//  3. The new extension is automatically picked up on next build.\n")
 	fmt.Fprintf(&b, "package %s\n\n", k.packageName)
 
 	if len(pkgs) == 0 {
 		fmt.Fprintf(&b, "// No extensions found in %s. Add one to get started.\n", relDir)
 	} else {
 		fmt.Fprintf(&b, "import (\n")
-		fmt.Fprintf(&b, "\t_ \"github.com/yeeth-security/scintx/internal/scintx\" // ensure registry is loaded\n")
+		fmt.Fprintf(&b, "\t_ \"github.com/yeeth-security/scintx/api\" // ensure registry is loaded\n")
 		for _, p := range pkgs {
 			fmt.Fprintf(&b, "\t_ %q\n", p)
 		}
