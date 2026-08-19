@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scintx.example/schemas/2020-12/compatibility-result.schema.json",
+  "title": "CompatibilityResult",
+  "description": "Result of capability matching for one (provider, capability). Returned for non-selected providers so clients understand why they were not invoked. This is NOT a ProviderResult.",
+  "type": "object",
+  "required": ["provider_id", "capability", "eligible"],
+  "properties": {
+    "provider_id": {"type": "string"},
+    "capability": {"type": "string"},
+    "eligible": {"type": "boolean"},
+    "reasons": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": ["missing_required_input", "unsupported_purl_type", "unsupported_digest_algorithm", "unsupported_sbom_format", "size_exceeded", "no_matching_profile"]
+          },
+          "input": {"type": "string"},
+          "detail": {"type": "string"}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

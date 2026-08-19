@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scintx.example/schemas/2020-12/artifact.schema.json",
+  "title": "Artifact",
+  "description": "The subject of a security analysis submission. v1 invariant: at least one of purl, digests (SHA-256-or-stronger), or content_ref+digests.",
+  "type": "object",
+  "properties": {
+    "purl": {
+      "type": "string",
+      "pattern": "^pkg:",
+      "description": "Canonical Package URL (ECMA-427). MUST be in canonical form."
+    },
+    "digests": {
+      "type": "object",
+      "additionalProperties": {"type": "string"},
+      "description": "Map of digest algorithm to hex digest. SHA-256-or-stronger is the v1 baseline for new submissions."
+    },
+    "content_ref": {
+      "$ref": "resource-reference.schema.json",
+      "description": "Retrivable content reference. If present, digests MUST contain a matching entry (enforced in submission-create schema)."
+    },
+    "sbom_refs": {
+      "type": "array",
+      "items": {"$ref": "resource-reference.schema.json"},
+      "description": "Supporting SBOM evidence about the artifact or its component graph."
+    },
+    "provenance_refs": {
+      "type": "array",
+      "items": {"$ref": "resource-reference.schema.json"}
+    },
+    "extensions": {
+      "type": "object"
+    }
+  },
+  "anyOf": [
+    {"required": ["purl"]},
+    {"required": ["digests"]},
+    {"required": ["content_ref"]}
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,57 @@
+# Example SCINTX policy document.
+#
+# Point submissions at this policy with:
+#   "policy_ref": "registry-default"
+#
+# Drop additional *.yaml files in this directory (or SCINTX_POLICIES_DIR).
+# Each file's metadata.id must be unique — that id is the policy_ref value.
+
+apiVersion: scintx.policy/v1
+kind: Policy
+
+metadata:
+  id: registry-default
+  version: "1"
+  description: Reference registry gate — deny critical CVSS, review high, defer unknowns.
+
+spec:
+  # Provider execution edge cases → decision escalation.
+  on_timeout: review
+  on_error: review
+  on_missing_verdict: review
+
+  # Map provider verdict values to a baseline decision.
+  # Finding rules below can escalate further (e.g. fail → deny).
+  verdicts:
+    pass: allow
+    warn: review
+    fail: review
+    unknown: defer
+
+  # First matching rule wins per finding; overall decision is the worst escalation.
+  findings:
+    - when:
+        assessment: affected
+        severity_scheme: CVSS
+        min_score: 9.0
+      decision: deny
+      reason_code: critical_severity_vulnerability
+      message: "CVSS {{score}} vulnerability with no fix available"
+
+    - when:
+        assessment: affected
+        severity_scheme: CVSS
+        min_score: 7.0
+      decision: review
+      reason_code: high_severity_vulnerability
+      message: "CVSS {{score}} vulnerability requires review"
+
+    - when:
+        assessment: affected
+      decision: review
+      reason_code: provider_fail
+      message: "Provider flagged finding {{finding_id}}"
+
+  # Used when the final decision is defer.
+  defer:
+    resume_after: 1h

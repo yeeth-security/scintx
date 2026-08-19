@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scintx.example/schemas/2020-12/submission-create.schema.json",
+  "title": "SubmissionCreateRequest",
+  "description": "Request body for POST /v1/submissions. Server returns a full Submission (202 Accepted).",
+  "type": "object",
+  "required": ["artifact"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "default": "1.0.0"
+    },
+    "artifact": {
+      "$ref": "artifact.schema.json"
+    },
+    "requested_capabilities": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Capability IDs to request (e.g. vulnerability, malware). If omitted, no provider is invoked."
+    },
+    "provider_selectors": {
+      "type": "object",
+      "description": "Optional provider selection hints (required/optional, min_providers_per_capability, etc.)."
+    },
+    "policy_ref": {
+      "type": "string",
+      "description": "Reference to a consumer policy. If absent, the submission completes with completion_reason=findings_only and no PolicyDecision."
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {"artifact": {"required": ["content_ref"]}},
+        "required": ["artifact"]
+      },
+      "then": {
+        "properties": {"artifact": {"required": ["digests"]}},
+        "description": "v1 invariant: content_ref without digests is rejected. A bare URL is never a valid artifact identity."
+      }
+    }
+  ]
+}

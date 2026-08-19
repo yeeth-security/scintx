@@ -1,0 +1,12 @@
+version: 2
+updates:
+  # Keep Action pins (commit SHAs) current.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  # Keep hashed schema Python deps current.
+  - package-ecosystem: pip
+    directory: /scripts
+    schedule:
+      interval: weekly

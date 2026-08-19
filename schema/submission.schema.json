@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scintx.example/schemas/2020-12/submission.schema.json",
+  "title": "Submission",
+  "description": "The orchestration aggregate for a security analysis. Server-generated fields (id, status, result_ids, decision_id, timestamps) are response-only.",
+  "type": "object",
+  "required": ["id", "schema_version", "artifact", "status", "created_at", "result_ids", "decision_id"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Opaque globally unique submission identifier."
+    },
+    "schema_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "artifact": {"$ref": "artifact.schema.json"},
+    "requested_capabilities": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "provider_selectors": {"type": "object"},
+    "policy_ref": {"type": "string"},
+    "status": {
+      "type": "string",
+      "enum": ["accepted", "running", "completed", "failed", "deferred"]
+    },
+    "completion_reason": {
+      "type": "string",
+      "enum": ["decision_produced", "findings_only", "deferred", "failed", "all_providers_ineligible"]
+    },
+    "created_at": {"type": "string", "format": "date-time"},
+    "completed_at": {"type": "string", "format": "date-time"},
+    "result_ids": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "decision_id": {
+      "type": ["string", "null"]
+    },
+    "resume_at": {"type": "string", "format": "date-time"},
+    "extensions": {"type": "object"}
+  },
+  "additionalProperties": false
+}
