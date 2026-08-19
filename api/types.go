@@ -27,6 +27,10 @@ type Artifact struct {
 	SBOMRefs       []ResourceReference `json:"sbom_refs,omitempty"`
 	ProvenanceRefs []ResourceReference `json:"provenance_refs,omitempty"`
 	Extensions     map[string]any      `json:"extensions,omitempty"`
+	// Content is the local blob bytes for providers that need exact file data
+	// (malware scanners, etc.). It is filled by the orchestrator from the
+	// store when content_ref is a urn:scintx:blob:… URI. Never serialized.
+	Content []byte `json:"-"`
 }
 
 type SubmissionStatus string

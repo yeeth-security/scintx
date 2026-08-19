@@ -446,6 +446,20 @@ func (s *SQLStore) HasArtifact(digest string) (bool, error) {
 	return err == nil, err
 }
 
+func (s *SQLStore) GetArtifact(digest string) ([]byte, bool, error) {
+	var content []byte
+	err := s.db.QueryRow(s.q(`SELECT content FROM artifacts WHERE digest = ?`), digest).Scan(&content)
+	if err == sql.ErrNoRows {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	cp := make([]byte, len(content))
+	copy(cp, content)
+	return cp, true, nil
+}
+
 func (s *SQLStore) RegisterProvider(p scintx.ProviderEntry) error {
 	body, err := json.Marshal(p.Capabilities)
 	if err != nil {

@@ -118,6 +118,19 @@ func (o *Orchestrator) Process(ctx context.Context, subID string) error {
 			artifact.PURL = &cp
 		}
 	}
+	// Load exact bytes for content-scanning providers (never persisted on JSON).
+	if err := o.hydrateLocalBlob(&artifact); err != nil {
+		reason := api.CompletionFailed
+		sub.Status = api.SubmissionFailed
+		sub.CompletionReason = &reason
+		now := apiNow()
+		sub.CompletedAt = &now
+		_ = o.store.PutSubmission(sub)
+		o.emitter.Emit("org.eclipse.scintx.submission.failed.v1", sub.ID, map[string]any{
+			"submission_id": sub.ID, "error": err.Error(),
+		})
+		return err
+	}
 
 	type selectedProvider struct {
 		ProvID     string

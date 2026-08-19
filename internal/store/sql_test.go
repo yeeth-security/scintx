@@ -57,6 +57,14 @@ func TestSQLiteStore_RoundTrip(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("artifact missing")
 	}
+	got, ok, err := st.GetArtifact("sha256:abc")
+	if err != nil || !ok || string(got) != "hi" {
+		t.Fatalf("GetArtifact: ok=%v body=%q err=%v", ok, got, err)
+	}
+	_, ok, err = st.GetArtifact("sha256:nope")
+	if err != nil || ok {
+		t.Fatalf("missing artifact: ok=%v err=%v", ok, err)
+	}
 
 	if err := st.RegisterProvider(scintx.ProviderEntry{
 		ID: "p1", Name: "p1",

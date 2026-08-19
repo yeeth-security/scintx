@@ -500,7 +500,7 @@ func (s *Server) uploadArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ref := api.ResourceReference{
-		URI:       "urn:scintx:blob:" + digest,
+		URI:       api.BlobURN(digest),
 		MediaType: r.Header.Get("Content-Type"),
 		Digests:   map[string]string{"sha256": hex.EncodeToString(h[:])},
 	}

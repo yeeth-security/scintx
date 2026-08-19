@@ -609,18 +609,30 @@ func TestE2E_AutoDiscoveredSecondProvider(t *testing.T) {
 
 func TestE2E_ContentDigestArtifact_SelectsSecretsProvider(t *testing.T) {
 	srv, _ := setup(t)
-	purl := "pkg:pypi/some-pkg@1.0.0"
-	digests := map[string]string{"sha256": "abc123"}
-	contentRef := map[string]any{
-		"uri":        "urn:scintx:blob:abc123",
-		"media_type": "application/octet-stream",
+	body := []byte("secret-scan-sample")
+	up := httptest.NewRequest("POST", "/v1/artifacts", bytes.NewReader(body))
+	up.Header.Set("Content-Type", "application/octet-stream")
+	upRR := httptest.NewRecorder()
+	srv.Routes().ServeHTTP(upRR, up)
+	if upRR.Code != 201 {
+		t.Fatalf("upload: %d %s", upRR.Code, upRR.Body.String())
 	}
+	var uploaded struct {
+		ArtifactRef struct {
+			Digests    map[string]string      `json:"digests"`
+			ContentRef *api.ResourceReference `json:"content_ref"`
+		} `json:"artifact_ref"`
+	}
+	if err := json.Unmarshal(upRR.Body.Bytes(), &uploaded); err != nil {
+		t.Fatal(err)
+	}
+	purl := "pkg:pypi/some-pkg@1.0.0"
 	rr := doRequest(t, srv, "POST", "/v1/submissions", map[string]any{
 		"schema_version": "1.0.0",
 		"artifact": map[string]any{
 			"purl":        purl,
-			"digests":     digests,
-			"content_ref": contentRef,
+			"digests":     uploaded.ArtifactRef.Digests,
+			"content_ref": uploaded.ArtifactRef.ContentRef,
 		},
 		"requested_capabilities": []string{"secrets"},
 	})

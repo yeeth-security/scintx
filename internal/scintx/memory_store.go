@@ -291,6 +291,19 @@ func (s *MemoryStore) HasArtifact(digest string) (bool, error) {
 	return ok, nil
 }
 
+func (s *MemoryStore) GetArtifact(digest string) ([]byte, bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	src, ok := s.artifacts[digest]
+	if !ok {
+		return nil, false, nil
+	}
+	// Copy so callers cannot mutate the store map.
+	cp := make([]byte, len(src))
+	copy(cp, src)
+	return cp, true, nil
+}
+
 func (s *MemoryStore) RegisterProvider(p ProviderEntry) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

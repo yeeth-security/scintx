@@ -86,6 +86,9 @@ type Store interface {
 
 	PutArtifact(digest string, content []byte) error
 	HasArtifact(digest string) (bool, error)
+	// GetArtifact returns a copy of stored bytes. ok=false means the digest
+	// was never uploaded (providers must not be called with an empty body).
+	GetArtifact(digest string) (content []byte, ok bool, err error)
 
 	RegisterProvider(p ProviderEntry) error
 	Providers() ([]ProviderEntry, error)

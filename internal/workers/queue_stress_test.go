@@ -106,7 +106,19 @@ func TestStressQueue_MultiProcessExactlyOnce(t *testing.T) {
 		t.Fatalf("processed=%d want %d", processed.Load(), jobs)
 	}
 
-	pending, err := st.PendingJobCount()
+	// Process() increments before CompleteJob deletes the row.
+	var pending int
+	var err error
+	for time.Now().Before(deadline) {
+		pending, err = st.PendingJobCount()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if pending == 0 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 	if err != nil || pending != 0 {
 		t.Fatalf("pending jobs=%d err=%v", pending, err)
 	}

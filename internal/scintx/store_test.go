@@ -57,6 +57,26 @@ func TestMemoryStore_IdempotencyKey(t *testing.T) {
 	}
 }
 
+func TestMemoryStore_GetArtifactCopy(t *testing.T) {
+	s := scintx.NewMemoryStore()
+	if err := s.PutArtifact("sha256:x", []byte("abc")); err != nil {
+		t.Fatal(err)
+	}
+	got, ok, err := s.GetArtifact("sha256:x")
+	if err != nil || !ok || string(got) != "abc" {
+		t.Fatalf("get: ok=%v body=%q err=%v", ok, got, err)
+	}
+	got[0] = 'Z'
+	again, _, _ := s.GetArtifact("sha256:x")
+	if again[0] != 'a' {
+		t.Fatal("GetArtifact must copy")
+	}
+	_, ok, err = s.GetArtifact("sha256:missing")
+	if err != nil || ok {
+		t.Fatalf("missing: ok=%v err=%v", ok, err)
+	}
+}
+
 func TestMemoryStore_AbandonSubmission(t *testing.T) {
 	s := scintx.NewMemoryStore()
 	sub := &api.Submission{ID: "sub_a", Status: api.SubmissionAccepted, ResultIDs: []string{}}
