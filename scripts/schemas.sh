@@ -11,7 +11,7 @@ if ! command -v python3 >/dev/null 2>&1; then
 fi
 
 if ! python3 -c "import jsonschema, referencing" >/dev/null 2>&1; then
-  die "schema Python deps missing; run: pip install -r scripts/requirements-schemas.txt"
+  die "schema Python deps missing; run: pip install --require-hashes -r scripts/requirements-schemas.txt"
 fi
 
 log "validate-schemas.py"
