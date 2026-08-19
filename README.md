@@ -104,6 +104,8 @@ Useful targets: `make run`, `make test`, `make check`. Full env list:
 
 Distributed under the Eclipse Public License 2.0 (EPL-2.0).
 
+Changes: [CHANGELOG.md](CHANGELOG.md).
+
 ---
 
 ## Architecture
