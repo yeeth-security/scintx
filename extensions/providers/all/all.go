@@ -14,6 +14,4 @@ import (
 	_ "github.com/yeeth-security/scintx/extensions/providers/argus"
 	_ "github.com/yeeth-security/scintx/extensions/providers/ossindex"
 	_ "github.com/yeeth-security/scintx/extensions/providers/osv"
-	_ "github.com/yeeth-security/scintx/extensions/providers/stub-osv"
-	_ "github.com/yeeth-security/scintx/extensions/providers/stub-secrets"
 )

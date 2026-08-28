@@ -8,14 +8,18 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/yeeth-security/scintx/api"
 	_ "github.com/yeeth-security/scintx/extensions/policies/all"  // registers policy engines
-	_ "github.com/yeeth-security/scintx/extensions/providers/all" // registers providers
+	_ "github.com/yeeth-security/scintx/extensions/providers/all" // registers production providers
+	_ "github.com/yeeth-security/scintx/test/stubs/secretsstub"   // registers offline test stub (stub-secrets)
+	_ "github.com/yeeth-security/scintx/test/stubs/stubosv"       // registers offline test stub (stub-osv)
 	"github.com/yeeth-security/scintx/internal/auth"
 	"github.com/yeeth-security/scintx/internal/scintx"
 	"github.com/yeeth-security/scintx/internal/server"
@@ -44,6 +48,25 @@ func policiesDir(t *testing.T) string {
 	}
 	t.Fatal("policies/ directory not found; set SCINTX_POLICIES_DIR")
 	return ""
+}
+
+// repoRoot walks up from the test cwd to the directory containing go.mod.
+func repoRoot(t *testing.T) string {
+	t.Helper()
+	d, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(d, "go.mod")); err == nil {
+			return d
+		}
+		parent := filepath.Dir(d)
+		if parent == d {
+			t.Fatal("could not find go.mod walking up from test cwd")
+		}
+		d = parent
+	}
 }
 
 func setup(t *testing.T) (*server.Server, scintx.Store) {
@@ -394,6 +417,89 @@ func TestE2E_ProviderListing(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("stub-osv provider not auto-discovered; got %+v", resp.Providers)
+	}
+}
+
+// TestE2E_ProductionProviderSet verifies the trim (SCINTX-130): the
+// production gateway (cmd/scintx) links only the keeper providers
+// (osv, ossindex, argus) and never the removed ones. The test binary itself
+// also imports the offline stubs as fixtures, so we assert the production
+// dependency graph via `go list` rather than the test-binary registry.
+func TestE2E_ProductionProviderSet(t *testing.T) {
+	// 1. The production binary's provider deps must be exactly the keepers.
+	cmd := exec.Command("go", "list", "-deps", "./cmd/scintx")
+	cmd.Dir = repoRoot(t)
+	out, err := cmd.Output()
+	if err != nil {
+		t.Skipf("go list unavailable: %v: %s", err, string(out))
+	}
+	depSet := map[string]bool{}
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		depSet[strings.TrimSpace(line)] = true
+	}
+	removed := []string{
+		"github.com/yeeth-security/scintx/extensions/providers/socket",
+		"github.com/yeeth-security/scintx/extensions/providers/reversinglabs",
+		"github.com/yeeth-security/scintx/test/stubs/stubosv",
+		"github.com/yeeth-security/scintx/test/stubs/secretsstub",
+	}
+	for _, id := range removed {
+		if depSet[id] {
+			t.Fatalf("removed provider %q still linked by production binary", id)
+		}
+	}
+	for _, id := range []string{
+		"github.com/yeeth-security/scintx/extensions/providers/osv",
+		"github.com/yeeth-security/scintx/extensions/providers/ossindex",
+		"github.com/yeeth-security/scintx/extensions/providers/argus",
+	} {
+		if !depSet[id] {
+			t.Fatalf("expected keeper %q linked by production binary", id)
+		}
+	}
+
+	// 2. With creds supplied and an empty allowlist, the three keepers load
+	// (ossindex needs a token; argus loads without a key — read at Assess).
+	t.Setenv("SCINTX_OSSINDEX_TOKEN", "guide-pat-for-trim-test")
+	t.Setenv("SCINTX_OSSINDEX_USER", "scintx")
+	t.Setenv("SCINTX_POLICIES_DIR", policiesDir(t))
+	t.Setenv("SCINTX_PROVIDERS", "osv,ossindex,argus") // explicit keepers only
+
+	store := scintx.NewStore()
+	emitter := scintx.NewEventEmitter("https://scintx.example", store)
+	policy, err := api.LoadPolicyEngine("yaml")
+	if err != nil {
+		t.Fatalf("failed to load yaml policy engine: %v", err)
+	}
+	orch := scintx.NewOrchestrator(store, policy, emitter)
+	if err := orch.LoadProvidersFromRegistry(); err != nil {
+		t.Fatalf("failed to load providers: %v", err)
+	}
+	srv := server.New(store, orch, emitter, nil)
+
+	rr := doRequest(t, srv, "GET", "/v1/providers", nil)
+	if rr.Code != 200 {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+	var resp struct {
+		Providers []struct {
+			ID string `json:"id"`
+		} `json:"providers"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]bool{}
+	for _, p := range resp.Providers {
+		got[p.ID] = true
+	}
+	for _, id := range []string{"osv", "ossindex", "argus"} {
+		if !got[id] {
+			t.Fatalf("expected keeper %q in production set; got %v", id, got)
+		}
+	}
+	if len(resp.Providers) != 3 {
+		t.Fatalf("expected exactly 3 production providers, got %d: %v", len(resp.Providers), got)
 	}
 }
 

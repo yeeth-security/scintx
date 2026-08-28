@@ -95,6 +95,18 @@ SCINTX_PROVIDERS=osv,ossindex ./bin/scintx
 Create a Guide PAT at https://guide.sonatype.com. CI should inject
 `SCINTX_OSSINDEX_TOKEN` from a secret store instead of `auth`.
 
+**Malware provider.** Argus (YARA + TLSH + multi-agent LLM, the OpenVSX
+pipeline) scans VSIX artifact bytes and is registered alongside OSV/OSS
+Index. Argus scans content, not PURLs:
+
+```bash
+# CI / secret-store style: set ARGUS_API_KEY in the environment
+ARGUS_API_KEY=argus_... SCINTX_PROVIDERS=osv,ossindex,argus ./bin/scintx
+```
+
+The default provider set (no `SCINTX_PROVIDERS` set) is osv + ossindex +
+argus. `malware-bazaar` is tracked (SCINTX-110) but not built yet.
+
 Useful targets: `make run`, `make test`, `make check`. Full env list:
 [`.env.example`](.env.example).
 

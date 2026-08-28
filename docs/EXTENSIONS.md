@@ -184,12 +184,14 @@ Registering two extensions with the same ID panics at startup. This is intention
 | Extension | Location | Interface |
 |---|---|---|
 | osv | `extensions/providers/osv/` | Provider (live OSV.dev; `SCINTX_OSV_BASE_URL`; optional `SCINTX_OSV_BEARER_TOKEN` / `SCINTX_OSV_API_KEY`) |
-| stub-osv | `extensions/providers/stub-osv/` | Provider (offline stub) |
-| stub-secrets | `extensions/providers/stub-secrets/` | Provider |
+| ossindex | `extensions/providers/ossindex/` | Provider (Sonatype OSS Index / Guide; `SCINTX_OSSINDEX_TOKEN`) |
+| argus | `extensions/providers/argus/` | Provider (malware scan of VSIX bytes; `ARGUS_API_KEY`, `ARGUS_BASE_URL`, `ARGUS_SCAN_TIMEOUT`) |
+| stub-osv | `test/stubs/stubosv/` | Provider (offline test fixture; not in the production binary) |
+| stub-secrets | `test/stubs/secretsstub/` | Provider (offline test fixture; not in the production binary) |
 | example | `extensions/policies/example/` | PolicyEngine (hard-coded example thresholds) |
 | yaml | `extensions/policies/yaml/` | PolicyEngine (YAML documents in `policies/`) |
 
-Optional startup filter: `SCINTX_PROVIDERS=osv,stub-secrets` (comma-separated). Empty loads every registered factory. E2E uses `stub-osv,stub-secrets` so vulnerability assessments stay offline.
+Optional startup filter: `SCINTX_PROVIDERS=osv,ossindex,argus` (comma-separated). Empty loads every registered production factory; missing-cred providers skip cleanly. The default production set is osv + ossindex + argus (`malware-bazaar` tracked in SCINTX-110, not built yet). E2E imports the offline stubs from `test/stubs/` so vulnerability assessments stay offline.
 ## YAML policies
 
 The `yaml` policy engine loads every `*.yaml` / `*.yml` file from `SCINTX_POLICIES_DIR`
