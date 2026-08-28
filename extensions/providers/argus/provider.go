@@ -6,7 +6,7 @@
 //
 // Configuration via environment:
 //
-//	ARGUS_BASE_URL     default https://app.yeethsecurity.com
+//	ARGUS_BASE_URL     default https://api.yeethsecurity.com
 //	ARGUS_API_KEY      required Bearer token (scan scope)
 //	ARGUS_SCAN_TIMEOUT default 120s (bounds total scan+poll ceiling)
 package argus
