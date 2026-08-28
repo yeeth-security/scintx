@@ -4,7 +4,7 @@
 // LLM, the OpenVSX pipeline) and polls the scan job until completion, then
 // maps the verdict to SCINTX Findings. Argus scans VSIX bytes, not PURLs.
 //
-// Base URL: https://app.yeethsecurity.com (override with ARGUS_BASE_URL).
+// Base URL: https://api.yeethsecurity.com (override with ARGUS_BASE_URL).
 // Auth:    ARGUS_API_KEY (Bearer, scan scope; required at startup).
 // Timeout: ARGUS_SCAN_TIMEOUT (default 120s) bounds total scan polling.
 package argus
@@ -23,7 +23,7 @@ import (
 	"time"
 )
 
-const defaultBaseURL = "https://app.yeethsecurity.com"
+const defaultBaseURL = "https://api.yeethsecurity.com"
 
 const (
 	pollInitial = 2 * time.Second
