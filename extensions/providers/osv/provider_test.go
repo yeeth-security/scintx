@@ -149,6 +149,99 @@ func TestPagination(t *testing.T) {
 	}
 }
 
+func TestVSCodeExtensionQueries(t *testing.T) {
+	purl := "pkg:vscode-extension/checkmarx/ast-results@2.56.0?repository_url=https://open-vsx.org"
+	qs, err := vscodeExtensionQueries(purl)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(qs) != 1 {
+		t.Fatalf("queries=%d want 1", len(qs))
+	}
+	if qs[0].Ecosystem != "VSCode:https://open-vsx.org" {
+		t.Fatalf("ecosystem=%q", qs[0].Ecosystem)
+	}
+	if qs[0].Name != "checkmarx.ast-results" || qs[0].Version != "2.56.0" {
+		t.Fatalf("query=%+v", qs[0])
+	}
+
+	// No repository_url → try both default registries.
+	qs, err = vscodeExtensionQueries("pkg:vscode-extension/checkmarx/ast-results@2.56.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(qs) != 2 {
+		t.Fatalf("queries=%d want 2", len(qs))
+	}
+}
+
+func TestAssessVSCodeExtensionEcosystemFallback(t *testing.T) {
+	// Simulate OSV: empty PURL response, then ecosystem hit for MAL-2026-2231.
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		var req queryRequest
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		if req.Package != nil && req.Package.PURL != "" {
+			_ = json.NewEncoder(w).Encode(queryResponse{Vulns: nil})
+			return
+		}
+		if req.Package != nil &&
+			req.Package.Ecosystem == "VSCode:https://open-vsx.org" &&
+			req.Package.Name == "checkmarx.ast-results" &&
+			req.Version == "2.56.0" {
+			_ = json.NewEncoder(w).Encode(queryResponse{
+				Vulns: []Vulnerability{{
+					ID:      "MAL-2026-2231",
+					Summary: "Malicious code in checkmarx.ast-results",
+				}},
+			})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(queryResponse{Vulns: nil})
+	}))
+	defer srv.Close()
+
+	p := &Provider{client: &Client{BaseURL: srv.URL, HTTPClient: srv.Client()}}
+	p.ManifestDigest = p.computeDigest()
+
+	purl := "pkg:vscode-extension/checkmarx/ast-results@2.56.0?repository_url=https://open-vsx.org"
+	res, err := p.Assess(t.Context(), api.Artifact{PURL: &purl}, api.Capability{ID: "vulnerability"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Execution.Status != api.ExecutionCompleted {
+		t.Fatalf("status=%s err=%v", res.Execution.Status, res.Execution.Error)
+	}
+	if res.Verdict == nil || res.Verdict.Value != api.VerdictFail {
+		t.Fatalf("verdict=%+v", res.Verdict)
+	}
+	if len(res.Findings) != 1 || res.Findings[0].ID != "MAL-2026-2231" {
+		t.Fatalf("findings=%+v", res.Findings)
+	}
+	if calls < 2 {
+		t.Fatalf("expected PURL then ecosystem call, calls=%d", calls)
+	}
+
+	// Capabilities must advertise vscode-extension so the orchestrator routes it.
+	caps := p.Capabilities()
+	found := false
+	for _, c := range caps.Capabilities {
+		for _, ip := range c.InputProfiles {
+			for _, req := range ip.Requires {
+				for _, typ := range req.Types {
+					if typ == "vscode-extension" {
+						found = true
+					}
+				}
+			}
+		}
+	}
+	if !found {
+		t.Fatal("capabilities missing vscode-extension")
+	}
+}
+
 func TestCVSSLevel(t *testing.T) {
 	cases := map[float64]string{9.1: "critical", 7.0: "high", 4.0: "medium", 0.1: "low", 0: "none"}
 	for score, want := range cases {

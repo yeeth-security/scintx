@@ -10,6 +10,9 @@ once tagged releases exist.
 
 ### Added
 
+- OSV provider: `vscode-extension` PURL support with ecosystem fallback when
+  PURL-only queries miss (e.g. Open VSX malware indexed as
+  `VSCode:https://open-vsx.org` / `publisher.name`).
 - Reference HTTP gateway (`scintx serve`) with worker pool, optional YAML policy, and CloudEvent webhooks.
 - In-memory store by default (ephemeral **forwarder**). Optional durable `sqlite` / `postgres`.
 - Live providers: OSV.dev (`osv`) and Sonatype OSS Index (`ossindex`).

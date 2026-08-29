@@ -53,6 +53,9 @@ func (p *Provider) Capabilities() api.ProviderCapabilities {
 							{Kind: api.ReqPurl, Types: []string{
 								"pypi", "npm", "maven", "golang", "cargo", "gem",
 								"nuget", "composer", "hex", "pub", "swift", "generic",
+								// OSV indexes VS Code malware as ecosystem+name, not
+								// pkg:vscode-extension/… — Assess falls back when PURL is empty.
+								"vscode-extension",
 							}},
 						},
 					},
@@ -91,18 +94,18 @@ func (p *Provider) Assess(ctx context.Context, artifact api.Artifact, capability
 
 	vulns, raw, err := p.client.QueryByPURL(ctx, canonical)
 	if err != nil {
-		var he *httpError
-		if errors.As(err, &he) {
-			code := api.ErrProvider4xx
-			if he.Status >= 500 {
-				code = api.ErrProvider5xx
+		return mapClientError(started, err), nil
+	}
+
+	// PURL queries miss VS Code malware that OSV stores under
+	// ecosystem "VSCode:<registry>" (e.g. MAL-2026-2231). Fall back.
+	if len(vulns) == 0 {
+		if typ, terr := api.PurlType(canonical); terr == nil && typ == "vscode-extension" {
+			vulns, raw, err = p.client.QueryVSCodeExtension(ctx, canonical)
+			if err != nil {
+				return mapClientError(started, err), nil
 			}
-			return errorResult(started, code, err.Error()), nil
 		}
-		if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return errorResult(started, api.ErrTimeout, err.Error()), nil
-		}
-		return errorResult(started, api.ErrTransport, err.Error()), nil
 	}
 
 	findings := vulnsToFindings(canonical, vulns)
@@ -126,6 +129,22 @@ func (p *Provider) Assess(ctx context.Context, artifact api.Artifact, capability
 			Format:    "osv",
 		},
 	}, nil
+}
+
+// mapClientError turns OSV HTTP/transport failures into ProviderResult errors.
+func mapClientError(started time.Time, err error) *api.ProviderResult {
+	var he *httpError
+	if errors.As(err, &he) {
+		code := api.ErrProvider4xx
+		if he.Status >= 500 {
+			code = api.ErrProvider5xx
+		}
+		return errorResult(started, code, err.Error())
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return errorResult(started, api.ErrTimeout, err.Error())
+	}
+	return errorResult(started, api.ErrTransport, err.Error())
 }
 
 func errorResult(started time.Time, code api.ProviderErrorCode, msg string) *api.ProviderResult {

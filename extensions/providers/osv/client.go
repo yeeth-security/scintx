@@ -51,11 +51,16 @@ func newClientFromEnv() *Client {
 
 type queryRequest struct {
 	Package   *queryPackage `json:"package,omitempty"`
+	Version   string        `json:"version,omitempty"`
 	PageToken string        `json:"page_token,omitempty"`
 }
 
+// queryPackage is the OSV "package" object. PURL and ecosystem/name are
+// alternate identification styles — OSV accepts either.
 type queryPackage struct {
-	PURL string `json:"purl"`
+	PURL      string `json:"purl,omitempty"`
+	Ecosystem string `json:"ecosystem,omitempty"`
+	Name      string `json:"name,omitempty"`
 }
 
 type queryResponse struct {
@@ -88,6 +93,19 @@ type osvReference struct {
 
 // QueryByPURL returns all vulnerability pages for a versioned PURL.
 func (c *Client) QueryByPURL(ctx context.Context, purl string) ([]Vulnerability, []byte, error) {
+	return c.query(ctx, &queryPackage{PURL: purl}, "")
+}
+
+// QueryByEcosystem returns all vulnerability pages for an OSV ecosystem
+// package (ecosystem + name + optional version). Used when PURL lookup is
+// empty but OSV indexes the package under a non-PURL ecosystem string
+// (notably VS Code extensions: "VSCode:https://open-vsx.org").
+func (c *Client) QueryByEcosystem(ctx context.Context, ecosystem, name, version string) ([]Vulnerability, []byte, error) {
+	return c.query(ctx, &queryPackage{Ecosystem: ecosystem, Name: name}, version)
+}
+
+// query POSTs /v1/query and follows next_page_token until exhausted.
+func (c *Client) query(ctx context.Context, pkg *queryPackage, version string) ([]Vulnerability, []byte, error) {
 	if c.HTTPClient == nil {
 		c.HTTPClient = &http.Client{Timeout: 30 * time.Second}
 	}
@@ -101,7 +119,7 @@ func (c *Client) QueryByPURL(ctx context.Context, purl string) ([]Vulnerability,
 	pageToken := ""
 
 	for {
-		body := queryRequest{Package: &queryPackage{PURL: purl}, PageToken: pageToken}
+		body := queryRequest{Package: pkg, Version: version, PageToken: pageToken}
 		raw, err := json.Marshal(body)
 		if err != nil {
 			return nil, nil, err
