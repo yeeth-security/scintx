@@ -13,6 +13,8 @@ once tagged releases exist.
 - OSV provider: `vscode-extension` PURL support with ecosystem fallback when
   PURL-only queries miss (e.g. Open VSX malware indexed as
   `VSCode:https://open-vsx.org` / `publisher.name`).
+- `SCINTX_MAX_ARTIFACT_BYTES` — configurable `POST /v1/artifacts` body cap
+  (default 1 GiB); over-limit returns `413 artifact_too_large`.
 - Reference HTTP gateway (`scintx serve`) with worker pool, optional YAML policy, and CloudEvent webhooks.
 - In-memory store by default (ephemeral **forwarder**). Optional durable `sqlite` / `postgres`.
 - Live providers: OSV.dev (`osv`) and Sonatype OSS Index (`ossindex`).
@@ -26,6 +28,9 @@ once tagged releases exist.
 
 ### Changed
 
+- Artifact upload limit raised from 32 MiB to 1 GiB (override via env).
+- Artifact read failures include the underlying error detail; size breaches
+  use problem title `artifact_too_large` instead of a generic 400.
 - Extension registry uses `init()` + `go generate` (`extensions/*/all`).
 - Public contract lives in `api/`; providers must not import `internal/`.
 

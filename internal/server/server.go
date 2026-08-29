@@ -6,9 +6,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
+	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -21,9 +25,26 @@ import (
 const (
 	// maxJSONBody caps JSON request bodies (submissions, etc.).
 	maxJSONBody = 1 << 20 // 1 MiB
-	// maxArtifactBody caps binary artifact uploads.
-	maxArtifactBody = 32 << 20 // 32 MiB
+	// defaultMaxArtifactBody caps binary artifact uploads (large VSIX).
+	// Override with SCINTX_MAX_ARTIFACT_BYTES (integer byte count).
+	defaultMaxArtifactBody int64 = 1 << 30 // 1 GiB
 )
+
+// maxArtifactBodyBytes returns the upload size cap. Default 1 GiB so large
+// VSIX / binary artifacts fit; operators can lower it via env.
+func maxArtifactBodyBytes() int64 {
+	raw := strings.TrimSpace(os.Getenv("SCINTX_MAX_ARTIFACT_BYTES"))
+	if raw == "" {
+		return defaultMaxArtifactBody
+	}
+	n, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || n <= 0 {
+		slog.Default().Warn("invalid SCINTX_MAX_ARTIFACT_BYTES; using default",
+			"value", raw, "default", defaultMaxArtifactBody)
+		return defaultMaxArtifactBody
+	}
+	return n
+}
 
 // Server is the HTTP adapter over Store + Orchestrator + job Dispatcher.
 type Server struct {
@@ -94,9 +115,11 @@ func (s *Server) Start(addr string) error {
 		Addr:              addr,
 		Handler:           s.Routes(),
 		ReadHeaderTimeout: 10 * time.Second,
-		ReadTimeout:       60 * time.Second,
-		WriteTimeout:      60 * time.Second,
-		IdleTimeout:       120 * time.Second,
+		// Long enough for large artifact uploads (default cap 1 GiB).
+		// Headers are still bounded by ReadHeaderTimeout above.
+		ReadTimeout:  15 * time.Minute,
+		WriteTimeout: 60 * time.Second,
+		IdleTimeout:  120 * time.Second,
 	}
 	return s.httpServer.ListenAndServe()
 }
@@ -487,10 +510,18 @@ func (s *Server) getProviderCapabilities(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) uploadArtifact(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, maxArtifactBody)
+	limit := maxArtifactBodyBytes()
+	r.Body = http.MaxBytesReader(w, r.Body, limit)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		writeProblem(w, 400, "invalid_request", "failed to read artifact body")
+		// MaxBytesReader returns *http.MaxBytesError when the cap is hit.
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			writeProblem(w, http.StatusRequestEntityTooLarge, "artifact_too_large",
+				fmt.Sprintf("artifact exceeds max size of %d bytes", limit))
+			return
+		}
+		writeProblem(w, 400, "invalid_request", "failed to read artifact body: "+err.Error())
 		return
 	}
 	h := sha256.Sum256(body)
