@@ -53,6 +53,9 @@ func (p *Provider) Capabilities() api.ProviderCapabilities {
 						ID: "purl",
 						Requires: []api.Requirement{
 							// OSS Index accepts Package URLs for major ecosystems.
+							// Do NOT advertise vscode-extension: Sonatype does not
+							// catalog VS Code extensions. An empty report would be
+							// treated as clean and hide real OSV malware hits.
 							{Kind: api.ReqPurl, Types: []string{
 								"pypi", "npm", "maven", "golang", "cargo", "gem",
 								"nuget", "composer", "generic",

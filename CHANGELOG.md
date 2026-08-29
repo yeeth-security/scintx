@@ -34,6 +34,11 @@ once tagged releases exist.
 - Extension registry uses `init()` + `go generate` (`extensions/*/all`).
 - Public contract lives in `api/`; providers must not import `internal/`.
 
+### Fixed
+
+- OSS Index capabilities: document why `vscode-extension` is not advertised
+  (empty Sonatype report must not look like a clean scan).
+
 ### Security
 
 - GitHub Actions pinned to commit SHAs, `permissions: contents: read`, `persist-credentials: false`.
