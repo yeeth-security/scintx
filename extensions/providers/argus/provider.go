@@ -1,8 +1,8 @@
 // Package argus is an Argus malware-scanning provider.
 //
 // It submits artifact bytes to the Argus scan API (YARA + TLSH + multi-agent
-// LLM, the OpenVSX pipeline) and polls the scan job until completion, then
-// maps the verdict to SCINTX Findings. Argus scans VSIX bytes, not PURLs.
+// LLM) and polls the scan job until completion, then maps the verdict to
+// SCINTX Findings. Argus scans package bytes for any ecosystem, not PURLs.
 //
 // Configuration via environment:
 //
@@ -55,12 +55,11 @@ func (p *Provider) Capabilities() api.ProviderCapabilities {
 				Version: "v1",
 				InputProfiles: []api.InputProfile{
 					{
+						// Content-only: any ecosystem package bytes (no MIME/ext
+						// filter). Empty Formats = accept whatever was uploaded.
 						ID: "content",
 						Requires: []api.Requirement{
-							{Kind: api.ReqContent, Formats: map[string][]string{
-								"application/octet-stream": {".vsix"},
-								"application/zip":          {".vsix"},
-							}},
+							{Kind: api.ReqContent},
 						},
 					},
 				},
@@ -137,7 +136,7 @@ func (p *Provider) Assess(ctx context.Context, artifact api.Artifact, capability
 
 // artifactFilename picks a filename for the multipart upload. It prefers a
 // name recorded on the artifact's content_ref extensions, else a hash-based
-// ".vsix" name. Argus uses the name only for display, not for scanning.
+// ".bin" name. Argus uses the name only for display, not for scanning.
 func artifactFilename(a api.Artifact) string {
 	if a.ContentRef != nil {
 		if ext := a.ContentRef.Extensions; ext != nil {
@@ -150,9 +149,9 @@ func artifactFilename(a api.Artifact) string {
 		}
 	}
 	if h, ok := a.Digests["sha256"]; ok && h != "" {
-		return h[:min(len(h), 16)] + ".vsix"
+		return h[:min(len(h), 16)] + ".bin"
 	}
-	return "artifact.vsix"
+	return "artifact.bin"
 }
 
 func min(a, b int) int {

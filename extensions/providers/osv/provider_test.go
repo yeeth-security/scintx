@@ -79,6 +79,63 @@ func TestAssessAgainstMockOSV(t *testing.T) {
 	}
 }
 
+func TestVsCodeExtensionOsvQueries(t *testing.T) {
+	qs := vscodeExtensionOsvQueries(
+		"pkg:vscode-extension/checkmarx/ast-results@2.56.0?repository_url=https%3A%2F%2Fopen-vsx.org",
+	)
+	if len(qs) != 1 {
+		t.Fatalf("queries=%+v", qs)
+	}
+	if qs[0].Ecosystem != "VSCode:https://open-vsx.org" || qs[0].Name != "checkmarx.ast-results" || qs[0].Version != "2.56.0" {
+		t.Fatalf("got=%+v", qs[0])
+	}
+	if vscodeExtensionOsvQueries("pkg:pypi/x@1") != nil {
+		t.Fatal("expected nil for non-vscode purl")
+	}
+}
+
+func TestAssessVsCodeFallsBackToEcosystem(t *testing.T) {
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		var req queryRequest
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		if req.Package != nil && req.Package.PURL != "" {
+			// PURL query — empty (OSV reality for vscode-extension).
+			_ = json.NewEncoder(w).Encode(queryResponse{Vulns: nil})
+			return
+		}
+		if req.Package != nil && req.Package.Ecosystem == "VSCode:https://open-vsx.org" {
+			_ = json.NewEncoder(w).Encode(queryResponse{
+				Vulns: []Vulnerability{{
+					ID:      "MAL-2026-2231",
+					Summary: "Malicious code in checkmarx.ast-results",
+				}},
+			})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(queryResponse{})
+	}))
+	defer srv.Close()
+
+	p := &Provider{client: &Client{BaseURL: srv.URL, HTTPClient: srv.Client()}}
+	p.ManifestDigest = p.computeDigest()
+	purl := "pkg:vscode-extension/checkmarx/ast-results@2.56.0?repository_url=https%3A%2F%2Fopen-vsx.org"
+	res, err := p.Assess(t.Context(), api.Artifact{PURL: &purl}, api.Capability{ID: "vulnerability"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls < 2 {
+		t.Fatalf("expected purl then ecosystem query, calls=%d", calls)
+	}
+	if len(res.Findings) != 1 || res.Findings[0].ID != "MAL-2026-2231" {
+		t.Fatalf("findings=%+v", res.Findings)
+	}
+	if res.Verdict == nil || res.Verdict.Value != api.VerdictFail {
+		t.Fatalf("verdict=%+v", res.Verdict)
+	}
+}
+
 func TestAssessCleanPackage(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(queryResponse{Vulns: nil})

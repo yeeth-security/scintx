@@ -54,8 +54,14 @@ type queryRequest struct {
 	PageToken string        `json:"page_token,omitempty"`
 }
 
+// queryPackage is the OSV /v1/query package selector.
+// Prefer PURL when the ecosystem understands it; for VS Code extensions OSV
+// currently indexes ecosystem+name (see VSCode:https://open-vsx.org).
 type queryPackage struct {
-	PURL string `json:"purl"`
+	PURL      string `json:"purl,omitempty"`
+	Ecosystem string `json:"ecosystem,omitempty"`
+	Name      string `json:"name,omitempty"`
+	Version   string `json:"version,omitempty"`
 }
 
 type queryResponse struct {
@@ -88,6 +94,15 @@ type osvReference struct {
 
 // QueryByPURL returns all vulnerability pages for a versioned PURL.
 func (c *Client) QueryByPURL(ctx context.Context, purl string) ([]Vulnerability, []byte, error) {
+	return c.query(ctx, &queryPackage{PURL: purl})
+}
+
+// QueryByEcosystem returns vulns for ecosystem + name + version (OSV native form).
+func (c *Client) QueryByEcosystem(ctx context.Context, ecosystem, name, version string) ([]Vulnerability, []byte, error) {
+	return c.query(ctx, &queryPackage{Ecosystem: ecosystem, Name: name, Version: version})
+}
+
+func (c *Client) query(ctx context.Context, pkg *queryPackage) ([]Vulnerability, []byte, error) {
 	if c.HTTPClient == nil {
 		c.HTTPClient = &http.Client{Timeout: 30 * time.Second}
 	}
@@ -101,7 +116,7 @@ func (c *Client) QueryByPURL(ctx context.Context, purl string) ([]Vulnerability,
 	pageToken := ""
 
 	for {
-		body := queryRequest{Package: &queryPackage{PURL: purl}, PageToken: pageToken}
+		body := queryRequest{Package: pkg, PageToken: pageToken}
 		raw, err := json.Marshal(body)
 		if err != nil {
 			return nil, nil, err

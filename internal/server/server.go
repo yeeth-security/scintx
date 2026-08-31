@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -21,8 +22,8 @@ import (
 const (
 	// maxJSONBody caps JSON request bodies (submissions, etc.).
 	maxJSONBody = 1 << 20 // 1 MiB
-	// maxArtifactBody caps binary artifact uploads.
-	maxArtifactBody = 32 << 20 // 32 MiB
+	// maxArtifactBody caps binary artifact uploads (large VSIX packages).
+	maxArtifactBody = 1 << 30 // 1 GiB
 )
 
 // Server is the HTTP adapter over Store + Orchestrator + job Dispatcher.
@@ -490,7 +491,13 @@ func (s *Server) uploadArtifact(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxArtifactBody)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		writeProblem(w, 400, "invalid_request", "failed to read artifact body")
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			writeProblem(w, http.StatusRequestEntityTooLarge, "artifact_too_large",
+				fmt.Sprintf("artifact exceeds gateway limit of %d bytes", maxArtifactBody))
+			return
+		}
+		writeProblem(w, 400, "invalid_request", "failed to read artifact body: "+err.Error())
 		return
 	}
 	h := sha256.Sum256(body)

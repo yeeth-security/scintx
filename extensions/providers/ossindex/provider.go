@@ -53,6 +53,10 @@ func (p *Provider) Capabilities() api.ProviderCapabilities {
 						ID: "purl",
 						Requires: []api.Requirement{
 							// OSS Index accepts Package URLs for major ecosystems.
+							// Sonatype OSS Index does not catalog vscode-extension /
+							// Open VSX packages — claiming that type would make
+							// empty reports look like "Undetected" instead of
+							// "Unable to process file type".
 							{Kind: api.ReqPurl, Types: []string{
 								"pypi", "npm", "maven", "golang", "cargo", "gem",
 								"nuget", "composer", "generic",
