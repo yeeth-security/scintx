@@ -18,6 +18,7 @@ import (
 	_ "github.com/yeeth-security/scintx/extensions/providers/malwarebazaar"
 	_ "github.com/yeeth-security/scintx/extensions/providers/ossindex"
 	_ "github.com/yeeth-security/scintx/extensions/providers/osv"
+	_ "github.com/yeeth-security/scintx/extensions/providers/skillspector"
 	_ "github.com/yeeth-security/scintx/extensions/providers/stub-osv"
 	_ "github.com/yeeth-security/scintx/extensions/providers/stub-secrets"
 )
