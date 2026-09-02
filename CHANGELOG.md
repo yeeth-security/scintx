@@ -1,10 +1,9 @@
 # Changelog
 
-All notable changes to this project are documented in this file.
+All notable changes to this project will be documented in this file.
 
-The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
-once tagged releases exist.
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
@@ -16,37 +15,21 @@ once tagged releases exist.
 - `SCINTX_MAX_ARTIFACT_BYTES` — configurable `POST /v1/artifacts` body cap
   (default 1 GiB); over-limit returns `413 artifact_too_large`.
 - Reference HTTP gateway (`scintx serve`) with worker pool, optional YAML policy, and CloudEvent webhooks.
-- In-memory store by default (ephemeral **forwarder**). Optional durable `sqlite` / `postgres`.
+- In-memory store by default (ephemeral forwarder). Optional durable `sqlite` / `postgres`.
 - Live providers: OSV.dev (`osv`) and Sonatype OSS Index (`ossindex`).
 - Offline stubs (`stub-osv`, `stub-secrets`) for tests and demos.
 - Cross-provider finding merge (CVE-anchored) and `GET /v1/submissions/{id}/merged`.
 - `scintx auth <provider>` — OS keyring (file fallback) for outbound provider credentials.
 - Optional anonymous adjudication forwarding (`SCINTX_FORWARD_ADJUDICATIONS`, off by default).
 - Artifact blob upload (`POST /v1/artifacts`) and hydration of local blob bytes onto `Artifact.Content` before `Assess` (not sent to PURL APIs).
-- JSON Schema 2020-12 documents, OpenAPI 3.1, README quickstart.
-- CI (`make check`) and GitHub Actions.
+- JSON Schema 2020-12 documents, OpenAPI 3.1, and README quickstart.
+- CI (`make check`) and GitHub Actions workflows.
+- EPL-2.0 license.
 
 ### Changed
 
-- Artifact upload limit raised from 32 MiB to 1 GiB (override via env).
-- Artifact read failures include the underlying error detail; size breaches
+- Artifact upload limit raised from 32 MiB to 1 GiB (override via `SCINTX_MAX_ARTIFACT_BYTES`).
+- Artifact read failures now include the underlying error detail; size breaches
   use problem title `artifact_too_large` instead of a generic 400.
-- Extension registry uses `init()` + `go generate` (`extensions/*/all`).
-- Public contract lives in `api/`; providers must not import `internal/`.
 
-### Fixed
-
-- OSS Index capabilities: document why `vscode-extension` is not advertised
-  (empty Sonatype report must not look like a clean scan).
-
-### Security
-
-- GitHub Actions pinned to commit SHAs, `permissions: contents: read`, `persist-credentials: false`.
-- Schema Python dependencies installed with `--require-hashes`.
-- Dependabot for Actions and pip (`scripts/`).
-
-## [0.0.1] — 2026-08-16
-
-### Added
-
-- Initial public repository: EPL-2.0 license and project README.
+[Unreleased]: https://github.com/yeeth-security/scintx/commits/HEAD
