@@ -66,9 +66,13 @@ func (p *Provider) Capabilities() api.ProviderCapabilities {
 				Version: "v1",
 				InputProfiles: []api.InputProfile{
 					{
-						// Requires content bytes. SkillSpector extracts the archive
-						// and finds agent skill files (CLAUDE.md, AGENTS.md, etc.)
-						// inside. Packages without skill files produce a clean pass.
+						// Requires content bytes. The provider extracts the archive
+						// and looks specifically for AI agent skill files:
+						//   CLAUDE.md, AGENTS.md, .cursorrules, SKILL.md,
+						//   .cursor/rules/*.md, copilot-instructions.md, etc.
+						// If none are found the scan returns a clean pass without
+						// invoking SkillSpector at all — preventing false positives
+						// from compiled JS, stylesheets, and README documentation.
 						ID: "content",
 						Requires: []api.Requirement{
 							{Kind: api.ReqContent},
@@ -77,14 +81,16 @@ func (p *Provider) Capabilities() api.ProviderCapabilities {
 				},
 				FindingTypes: []string{
 					// All SkillSpector categories map to malware findings.
-					// The category field (e.g. "prompt-injection", "data-exfiltration")
+					// The category (e.g. "prompt-injection", "data-exfiltration")
 					// is stored in Finding.Fingerprints["skillspector.category"].
 					"malware",
 				},
 				NativeOutputFormats: []string{"skillspector-json"},
-				// Static mode (~5s); LLM mode can be 30–120s.
-				CostHint:    "medium",
-				LatencyHint: "medium",
+				// Static mode is fast (~5s per skill file); LLM mode can be 30–120s.
+				// Only invoked when skill files are present — packages without them
+				// are filtered out before SkillSpector runs.
+				CostHint:    "low",
+				LatencyHint: "low",
 			},
 		},
 		// SkillSpector has no adjudication-feedback endpoint.
