@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scintx.example/schemas/2020-12/event.schema.json",
+  "title": "CloudEvent (SCINTX v1 envelope)",
+  "description": "SCINTX adopts the CloudEvents 1.0 envelope directly. Event identity is (source, id); retries reuse the same id. The type suffix (.v1) is the event-kind version; data.schema_version is the payload entity version. They are independent.",
+  "type": "object",
+  "required": ["specversion", "id", "source", "type", "time"],
+  "properties": {
+    "specversion": {"type": "string", "const": "1.0"},
+    "id": {"type": "string", "description": "Unique within source. Reused on retries for duplicate detection."},
+    "source": {"type": "string", "format": "uri"},
+    "type": {
+      "type": "string",
+      "description": "SCINTX v1 event type. See normative registry.",
+      "enum": [
+        "org.eclipse.scintx.submission.created.v1",
+        "org.eclipse.scintx.submission.completed.v1",
+        "org.eclipse.scintx.submission.failed.v1",
+        "org.eclipse.scintx.submission.deferred.v1",
+        "org.eclipse.scintx.provider.invocation.started.v1",
+        "org.eclipse.scintx.provider.result.completed.v1",
+        "org.eclipse.scintx.provider.result.error.v1",
+        "org.eclipse.scintx.provider.result.timeout.v1",
+        "org.eclipse.scintx.policy-decision.created.v1",
+        "org.eclipse.scintx.policy-decision.resolved.v1",
+        "org.eclipse.scintx.delivery.dead_lettered.v1"
+      ]
+    },
+    "subject": {"type": "string", "description": "Typically the submission id."},
+    "time": {"type": "string", "format": "date-time"},
+    "datacontenttype": {"type": "string"},
+    "dataschema": {"type": "string", "format": "uri"},
+    "data": {"type": "object"},
+    "sequence": {"type": "integer", "minimum": 0, "description": "Per-source monotonic integer. Best-effort across retries; not exactly-once."}
+  },
+  "additionalProperties": true
+}

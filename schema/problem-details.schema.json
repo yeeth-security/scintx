@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scintx.example/schemas/2020-12/problem-details.schema.json",
+  "title": "ProblemDetails",
+  "description": "RFC 9457 Problem Details for HTTP APIs. SCINTX uses this for all API error responses.",
+  "type": "object",
+  "required": ["type", "title", "status"],
+  "properties": {
+    "type": {"type": "string", "format": "uri", "description": "Problem type URI."},
+    "title": {"type": "string", "description": "Short, human-readable summary."},
+    "status": {"type": "integer", "minimum": 100, "maximum": 599},
+    "detail": {"type": "string", "description": "Human-readable explanation specific to this occurrence."},
+    "instance": {"type": "string", "format": "uri-reference"}
+  },
+  "additionalProperties": true
+}

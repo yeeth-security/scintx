@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scintx.example/schemas/2020-12/provider-capabilities.schema.json",
+  "title": "ProviderCapabilities",
+  "description": "Capability manifest describing what a provider can evaluate. Manifests are snapshotted + hashed at submission start so later changes cannot retroactively explain a selection.",
+  "type": "object",
+  "required": ["schema_version", "provider", "manifest_version", "manifest_digest", "updated_at", "capabilities"],
+  "properties": {
+    "schema_version": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
+    "provider": {
+      "type": "object",
+      "required": ["id", "version"],
+      "properties": {
+        "id": {"type": "string"},
+        "name": {"type": "string"},
+        "version": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "manifest_version": {"type": "string"},
+    "manifest_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "SHA-256 digest of the canonical capabilities JSON."
+    },
+    "updated_at": {"type": "string", "format": "date-time"},
+    "capabilities": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/Capability"},
+      "minItems": 1
+    },
+    "extensions": {"type": "object"}
+  },
+  "$defs": {
+    "Capability": {
+      "type": "object",
+      "required": ["id", "version", "input_profiles", "finding_types"],
+      "properties": {
+        "id": {"type": "string", "description": "Capability identifier, e.g. vulnerability, malware."},
+        "version": {"type": "string", "description": "Capability version, e.g. v1."},
+        "input_profiles": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/InputProfile"},
+          "minItems": 1,
+          "description": "Disjunctive normal form: profiles are OR; requirements within a profile are AND."
+        },
+        "finding_types": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "native_output_formats": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "limits": {"type": "object"},
+        "cost_hint": {"type": "string", "enum": ["low", "medium", "high"]},
+        "latency_hint": {"type": "string", "enum": ["fast", "moderate", "slow"]}
+      },
+      "additionalProperties": false
+    },
+    "InputProfile": {
+      "type": "object",
+      "required": ["id", "requires"],
+      "properties": {
+        "id": {"type": "string"},
+        "requires": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/Requirement"},
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "Requirement": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["purl", "digest", "content", "sbom", "provenance"]
+        },
+        "types": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "For kind=purl: accepted PURL types (e.g. npm, pypi)."
+        },
+        "algorithms": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "For kind=digest: accepted digest algorithms."
+        },
+        "formats": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "description": "For kind=sbom|provenance: map of format -> accepted versions."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

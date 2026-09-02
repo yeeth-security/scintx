@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scintx.example/schemas/2020-12/policy-decision.schema.json",
+  "title": "PolicyDecision",
+  "description": "The consumer-side result. Provider verdicts are never silently converted into consumer decisions; the policy layer exists because different consumers have different risk tolerances.",
+  "type": "object",
+  "required": ["id", "submission_id", "decision", "policy", "evaluated_at", "input_result_ids"],
+  "properties": {
+    "id": {"type": "string"},
+    "submission_id": {"type": "string"},
+    "decision": {"type": "string", "enum": ["allow", "review", "deny", "defer"]},
+    "policy": {
+      "type": "object",
+      "required": ["id", "version"],
+      "properties": {
+        "id": {"type": "string"},
+        "version": {"type": "string"},
+        "digest": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "evaluated_at": {"type": "string", "format": "date-time"},
+    "input_result_ids": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "reasons": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/DecisionReason"},
+      "description": "Auditable rationale linking the decision to specific findings and severity observations."
+    },
+    "resume_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Set when decision=defer. Indicates when the submission may be resumed."
+    },
+    "resume_on": {
+      "type": "string",
+      "description": "Event type that may trigger resume."
+    },
+    "extensions": {"type": "object"}
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "DecisionReason": {
+      "type": "object",
+      "required": ["code", "result_id", "message"],
+      "properties": {
+        "code": {"type": "string", "description": "Machine-readable reason code, e.g. high_severity_vulnerability, required_provider_timeout."},
+        "result_id": {"type": "string"},
+        "finding_id": {"type": "string", "description": "Optional: finding that drove this reason."},
+        "severity_ref": {
+          "type": "object",
+          "properties": {
+            "scheme": {"type": "string"},
+            "version": {"type": "string"},
+            "score": {"type": "number", "minimum": 0, "maximum": 10}
+          },
+          "additionalProperties": false
+        },
+        "message": {"type": "string", "description": "Human-readable explanation."}
+      },
+      "additionalProperties": false
+    }
+  }
+}

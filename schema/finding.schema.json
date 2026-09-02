@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scintx.example/schemas/2020-12/finding.schema.json",
+  "title": "Finding",
+  "description": "An interoperability envelope around scanner-specific evidence. Preserves native identifiers, severity observations, CWE classifications, VEX/applicability, and evidence without forcing a lowest-common-denominator rewrite.",
+  "type": "object",
+  "required": ["id", "type"],
+  "properties": {
+    "id": {"type": "string", "description": "Provider-stable finding identifier."},
+    "type": {"type": "string", "description": "Finding type, e.g. vulnerability, malware, secret."},
+    "title": {"type": "string"},
+    "description": {"type": "string"},
+    "identifiers": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/TypedIdentifier"},
+      "description": "Typed identifiers. relation preserves OSV alias/upstream/related distinction."
+    },
+    "subjects": {
+      "type": "array",
+      "items": {"$ref": "artifact-ref.schema.json"},
+      "description": "Artifact(s) this finding applies to."
+    },
+    "subject_origin": {
+      "type": "string",
+      "enum": ["submitted_artifact", "component"],
+      "description": "Whether the finding applies to the submitted artifact or to a component within an attached SBOM."
+    },
+    "subject_path": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "For subject_origin=component: component identifiers tracing submitted-artifact -> transitive component."
+    },
+    "severity": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/SeverityObservation"},
+      "description": "Multiple severity observations preserve disagreement across sources (CVSS v3.1 vs v4.0, NVD vs vendor, etc.)."
+    },
+    "weaknesses": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/CweRef"},
+      "description": "CWE classifications. CWE is classification only, never severity."
+    },
+    "assessment": {"$ref": "#/$defs/Assessment"},
+    "references": {
+      "type": "array",
+      "items": {"type": "string", "format": "uri"}
+    },
+    "evidence": {
+      "type": "array",
+      "items": {"$ref": "resource-reference.schema.json"}
+    },
+    "remediation": {
+      "type": "object",
+      "properties": {
+        "summary": {"type": "string"},
+        "detail": {"type": "string"},
+        "references": {"type": "array", "items": {"type": "string", "format": "uri"}}
+      },
+      "additionalProperties": false
+    },
+    "fingerprints": {
+      "type": "object",
+      "additionalProperties": {"type": "string"}
+    },
+    "metrics": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/Metric"},
+      "description": "Risk/exploitation metrics (EPSS, SSVC, KEV). Distinct from severity."
+    },
+    "extensions": {"type": "object"}
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "TypedIdentifier": {
+      "type": "object",
+      "required": ["scheme", "value"],
+      "properties": {
+        "scheme": {"type": "string", "description": "Identifier scheme, e.g. CVE, GHSA, OSV."},
+        "value": {"type": "string"},
+        "relation": {
+          "type": "string",
+          "enum": ["none", "alias", "upstream", "related"],
+          "default": "none",
+          "description": "Relationship to this finding. Aligns with OSV alias/upstream/related semantics."
+        }
+      },
+      "additionalProperties": false
+    },
+    "SeverityObservation": {
+      "type": "object",
+      "required": ["scheme"],
+      "properties": {
+        "scheme": {"type": "string", "description": "e.g. CVSS, vendor."},
+        "version": {"type": "string", "description": "e.g. 3.1, 4.0."},
+        "score": {"type": "number", "minimum": 0, "maximum": 10},
+        "level": {"type": "string", "description": "Qualitative band: none, low, medium, high, critical."},
+        "vector": {"type": "string", "description": "Full vector string conveys more info than the derived level."},
+        "source": {"type": "string", "description": "Who/what produced this observation."},
+        "derivation": {
+          "type": "object",
+          "required": ["method"],
+          "properties": {"method": {"type": "string"}},
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "CweRef": {
+      "type": "object",
+      "required": ["scheme", "id"],
+      "properties": {
+        "scheme": {"type": "string", "enum": ["CWE"]},
+        "id": {"type": "string", "pattern": "^CWE-\\d+$"}
+      },
+      "additionalProperties": false
+    },
+    "Assessment": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["affected", "not_affected", "fixed", "under_investigation", "unknown"]
+        },
+        "justification": {"type": "string"},
+        "detail": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "Metric": {
+      "type": "object",
+      "required": ["scheme", "value"],
+      "properties": {
+        "scheme": {"type": "string", "description": "e.g. EPSS, SSVC, KEV."},
+        "value": {"type": ["number", "string", "boolean"]},
+        "version": {"type": "string"},
+        "percentile": {"type": "number", "minimum": 0, "maximum": 1},
+        "observed_at": {"type": "string", "format": "date-time"},
+        "extensions": {"type": "object"}
+      },
+      "additionalProperties": false
+    }
+  }
+}

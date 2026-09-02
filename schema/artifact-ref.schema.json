@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scintx.example/schemas/2020-12/artifact-ref.schema.json",
+  "title": "ArtifactRef",
+  "description": "A strict subset of Artifact used inside Findings to identify subjects without nested SBOM/provenance references.",
+  "type": "object",
+  "properties": {
+    "purl": {
+      "type": "string",
+      "pattern": "^pkg:",
+      "description": "Canonical Package URL (ECMA-427). MUST be in canonical form."
+    },
+    "digests": {
+      "type": "object",
+      "additionalProperties": {"type": "string"}
+    },
+    "content_ref": {
+      "$ref": "resource-reference.schema.json"
+    }
+  },
+  "anyOf": [
+    {"required": ["purl"]},
+    {"required": ["digests"]},
+    {"required": ["content_ref"]}
+  ],
+  "additionalProperties": false
+}
