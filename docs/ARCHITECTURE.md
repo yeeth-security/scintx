@@ -1,16 +1,5 @@
 # SCINTX Architecture
 
-| Field | Value |
-| --- | --- |
-| Document | ARCHITECTURE |
-| Product | SCINTX reference gateway |
-| Language style | ASD-STE100 (Simplified Technical English) |
-| Status | Informative |
-
-**STE note.** This document uses ASD-STE100 style: short sentences, active voice, one idea per sentence, and one meaning per technical term. Mermaid figures support the text.
-
----
-
 ## 1. Purpose
 
 This document describes the reference gateway architecture.
