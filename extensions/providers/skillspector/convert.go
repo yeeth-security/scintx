@@ -125,59 +125,58 @@ func ssSeverityLevel(sev string) string {
 	}
 }
 
-// verdictFromReport derives the SCINTX verdict from the SkillSpector
-// risk_assessment.recommendation field (SAFE → pass, REVIEW → warn,
-// UNSAFE → fail). Falls back to findings-count logic when the report is nil.
+// verdictFromReport derives the SCINTX verdict from the SkillSpector output.
+//
+// Mapping rationale:
+//   - SAFE (no findings)  → pass
+//   - REVIEW or UNSAFE (any findings) → fail
+//
+// SkillSpector's "REVIEW" recommendation means "worth a human look", not
+// "probably benign". Any confirmed finding inside an AI skill file is a
+// security signal that should count toward the malicious detection count.
+// The severity level (low/medium/high/critical) on each Finding already
+// carries the gradation — callers should not use the verdict to infer severity.
 func verdictFromReport(report *ssReport, findings []api.Finding) *api.Verdict {
-	if report != nil {
-		switch strings.ToUpper(report.RiskAssessment.Recommendation) {
-		case "SAFE":
-			return &api.Verdict{
-				Value:  api.VerdictPass,
-				Origin: api.VerdictOriginProvider,
-				Rule:   "skillspector.recommendation_safe",
-			}
-		case "REVIEW":
-			return &api.Verdict{
-				Value:  api.VerdictWarn,
-				Origin: api.VerdictOriginProvider,
-				Rule:   "skillspector.recommendation_review",
-			}
-		case "UNSAFE":
-			driven := buildDriven(findings)
-			return &api.Verdict{
-				Value:  api.VerdictFail,
-				Origin: api.VerdictOriginProvider,
-				Rule:   "skillspector.recommendation_unsafe",
-				Derivation: &api.VerdictDerivation{
-					DrivenBy: driven,
-					Summary: fmt.Sprintf(
-						"skillspector: score=%d (%s), %d issue(s)",
-						report.RiskAssessment.Score,
-						report.RiskAssessment.Severity,
-						len(findings),
-					),
-				},
-			}
-		}
-	}
-
-	// Fallback: no findings → pass; any findings → fail.
-	if len(findings) == 0 {
+	// Clean result: SkillSpector explicitly says SAFE and found nothing.
+	if report != nil && strings.ToUpper(report.RiskAssessment.Recommendation) == "SAFE" && len(findings) == 0 {
 		return &api.Verdict{
 			Value:  api.VerdictPass,
 			Origin: api.VerdictOriginProvider,
-			Rule:   "skillspector.no_issues",
+			Rule:   "skillspector.recommendation_safe",
 		}
 	}
+
+	// Any findings → fail, regardless of REVIEW vs UNSAFE recommendation.
+	// Both represent a confirmed security issue in a skill file.
+	if len(findings) > 0 {
+		driven := buildDriven(findings)
+		rule := "skillspector.issues_found"
+		summary := fmt.Sprintf("skillspector: %d issue(s) detected", len(findings))
+		if report != nil {
+			rule = fmt.Sprintf("skillspector.recommendation_%s", strings.ToLower(report.RiskAssessment.Recommendation))
+			summary = fmt.Sprintf(
+				"skillspector: score=%d (%s), %d issue(s)",
+				report.RiskAssessment.Score,
+				report.RiskAssessment.Severity,
+				len(findings),
+			)
+		}
+		return &api.Verdict{
+			Value:  api.VerdictFail,
+			Origin: api.VerdictOriginProvider,
+			Rule:   rule,
+			Derivation: &api.VerdictDerivation{
+				DrivenBy: driven,
+				Summary:  summary,
+			},
+		}
+	}
+
+	// No findings → pass.
 	return &api.Verdict{
-		Value:  api.VerdictFail,
+		Value:  api.VerdictPass,
 		Origin: api.VerdictOriginProvider,
-		Rule:   "skillspector.issues_found",
-		Derivation: &api.VerdictDerivation{
-			DrivenBy: buildDriven(findings),
-			Summary:  fmt.Sprintf("skillspector: %d issue(s) detected", len(findings)),
-		},
+		Rule:   "skillspector.no_issues",
 	}
 }
 

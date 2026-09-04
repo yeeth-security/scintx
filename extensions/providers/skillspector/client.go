@@ -136,12 +136,13 @@ type ssMetadata struct {
 	LLMAvailable         bool   `json:"llm_available"`
 }
 
-// Scan extracts skill files from the archive, then runs skillspector against
-// only those files. If the archive contains no recognizable skill files (e.g.
-// a plain VS Code extension with no CLAUDE.md / .cursorrules / etc.) the scan
-// returns a clean empty report without invoking the binary at all.
+// Scan extracts AI agent skill files from the archive, then runs SkillSpector
+// against only those files. If no skill files are found the method returns a
+// clean empty report without invoking the binary at all.
+//
+// This is the default scan path. Use ScanAll when the caller has explicitly
+// declared that the artifact is a skill package (via ContentRef.MediaType).
 func (c *Client) Scan(ctx context.Context, content []byte) ([]byte, *ssReport, error) {
-	// Extract only skill files into a temp directory.
 	skillDir, found, err := extractSkillFiles(content)
 	if skillDir != "" {
 		defer os.RemoveAll(skillDir) //nolint:errcheck
@@ -150,13 +151,62 @@ func (c *Client) Scan(ctx context.Context, content []byte) ([]byte, *ssReport, e
 		return nil, nil, fmt.Errorf("skillspector: extract skill files: %w", err)
 	}
 	if !found {
-		// No skill files in this package — return a clean pass without
-		// invoking skillspector at all. This prevents false positives from
-		// compiled JS, README documentation, stylesheets, etc.
+		// No skill files found — clean pass, no binary invocation.
+		// This prevents false positives from compiled JS, stylesheets, READMEs, etc.
 		return nil, &ssReport{}, nil
 	}
 
 	return c.runSkillspector(ctx, skillDir)
+}
+
+// ScanDirect writes a single plain skill file (e.g. SKILL.md) into a temp
+// directory and runs SkillSpector against that directory. Use this when the
+// artifact is a raw skill file — not an archive — so that SkillSpector sees
+// it under the correct filename and applies its detection rules.
+//
+// filename is the base name to use (e.g. "SKILL.md"). If it is empty or not
+// a recognised skill filename, "SKILL.md" is used as the fallback so that
+// SkillSpector always has a valid target to analyse.
+func (c *Client) ScanDirect(ctx context.Context, content []byte, filename string) ([]byte, *ssReport, error) {
+	// Ensure the file will be recognised as a skill file by SkillSpector.
+	// Fall back to "SKILL.md" if the name is empty or unrecognised.
+	base := filepath.Base(filename)
+	if base == "" || base == "." || !isSkillFile(base) {
+		base = "SKILL.md"
+	}
+
+	tmpDir, err := os.MkdirTemp("", "skillspector-skill-*")
+	if err != nil {
+		return nil, nil, fmt.Errorf("skillspector: create temp dir: %w", err)
+	}
+	defer os.RemoveAll(tmpDir) //nolint:errcheck
+
+	dest := filepath.Join(tmpDir, base)
+	if err := os.WriteFile(dest, content, 0600); err != nil {
+		return nil, nil, fmt.Errorf("skillspector: write skill file: %w", err)
+	}
+
+	return c.runSkillspector(ctx, tmpDir)
+}
+
+// ScanAll writes the entire archive to a temp file and runs SkillSpector against
+// it without any skill-file pre-filtering. Use this when the caller has
+// explicitly declared the artifact contains skill files via ContentRef.MediaType.
+func (c *Client) ScanAll(ctx context.Context, content []byte) ([]byte, *ssReport, error) {
+	f, err := os.CreateTemp("", "skillspector-*.zip")
+	if err != nil {
+		return nil, nil, fmt.Errorf("skillspector: write temp file: %w", err)
+	}
+	tmpPath := f.Name()
+	defer os.Remove(tmpPath) //nolint:errcheck
+
+	if _, err := f.Write(content); err != nil {
+		f.Close()          //nolint:errcheck
+		return nil, nil, fmt.Errorf("skillspector: write temp file: %w", err)
+	}
+	f.Close() //nolint:errcheck
+
+	return c.runSkillspector(ctx, tmpPath)
 }
 
 // runSkillspector invokes the skillspector CLI against a directory of skill files.

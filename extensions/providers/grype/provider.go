@@ -102,12 +102,32 @@ func (p *Provider) computeDigest() string {
 	return "sha256:" + hex.EncodeToString(h[:])
 }
 
+// agentSkillMediaTypes is the set of MIME types that identify AI agent skill
+// files. Grype is a vulnerability scanner for software packages; it cannot
+// parse markdown or agent-skill archives as SBOMs. When these types are
+// stamped on the artifact we return a normalization error immediately instead
+// of letting Grype fail with a confusing "sbom format not recognized" message.
+var agentSkillMediaTypes = map[string]bool{
+	"application/x-agent-skill":     true,
+	"application/x-agent-skill+zip": true,
+	"application/x-agent-skill+tar": true,
+}
+
 // Assess runs grype against the artifact. It prefers content bytes (file scan)
 // and falls back to a PURL-only scan when bytes are not available.
 func (p *Provider) Assess(ctx context.Context, artifact api.Artifact, _ api.Capability) (*api.ProviderResult, error) {
 	started := time.Now().UTC()
 	if p.client == nil {
 		p.client = newClientFromEnv()
+	}
+
+	// Guard: Grype cannot scan AI agent skill files — they are markdown
+	// documents, not software packages with an SBOM or package manifest.
+	// Return a normalization error so the UI shows a clear message rather than
+	// the confusing "sbom format not recognized" exit from the grype binary.
+	if artifact.ContentRef != nil && agentSkillMediaTypes[artifact.ContentRef.MediaType] {
+		return grypError(started, api.ErrNormalization,
+			"Grype does not scan agent skill files — this artifact is not a software package"), nil
 	}
 
 	var raw []byte

@@ -57,10 +57,11 @@ func (p *Provider) Capabilities() api.ProviderCapabilities {
 					{
 						ID: "content",
 						Requires: []api.Requirement{
-							{Kind: api.ReqContent, Formats: map[string][]string{
-								"application/octet-stream": {".vsix"},
-								"application/zip":          {".vsix"},
-							}},
+							// Argus accepts any binary content — the scanner handles
+							// many package formats (VSIX, wheel, tarball, gem, jar,
+							// skill files, etc.). No format restriction here keeps
+							// the engine eligible for all content-based scans.
+							{Kind: api.ReqContent},
 						},
 					},
 				},
@@ -135,9 +136,16 @@ func (p *Provider) Assess(ctx context.Context, artifact api.Artifact, capability
 	}, nil
 }
 
-// artifactFilename picks a filename for the multipart upload. It prefers a
-// name recorded on the artifact's content_ref extensions, else a hash-based
-// ".vsix" name. Argus uses the name only for display, not for scanning.
+// artifactFilename picks a filename for the multipart upload.
+//
+// Resolution order:
+//  1. content_ref.extensions["filename"] — the on-ramp sets this to the
+//     original uploaded/downloaded filename so Argus shows it correctly.
+//  2. content_ref.extensions["name"]    — legacy alias, same purpose.
+//  3. Hash-based fallback               — sha256[:16] + ".bin" when no
+//     name was forwarded (old on-ramp versions / direct gateway calls).
+//
+// Argus uses the filename for display only; it does not affect scanning.
 func artifactFilename(a api.Artifact) string {
 	if a.ContentRef != nil {
 		if ext := a.ContentRef.Extensions; ext != nil {
@@ -149,10 +157,12 @@ func artifactFilename(a api.Artifact) string {
 			}
 		}
 	}
+	// Fallback: use first 16 hex chars of the SHA-256 with a generic extension.
+	// Previously this was ".vsix" which was misleading for non-VSIX content.
 	if h, ok := a.Digests["sha256"]; ok && h != "" {
-		return h[:min(len(h), 16)] + ".vsix"
+		return h[:min(len(h), 16)] + ".bin"
 	}
-	return "artifact.vsix"
+	return "artifact.bin"
 }
 
 func min(a, b int) int {

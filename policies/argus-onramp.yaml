@@ -1,0 +1,95 @@
+# Argus On-Ramp custom policy.
+#
+# Design intent:
+#   - Malware: any single engine flagging an artifact as malicious → deny.
+#     This follows VirusTotal's philosophy: one confirmed signal is enough.
+#   - Vulnerabilities: severity-tiered gating — critical CVEs block, high CVEs
+#     request human review, lower severities pass through.
+#   - Provider failures (timeout, error, missing verdict) → review, never deny.
+#     We never block a scan solely because a tool failed to run.
+#   - Provider disagreement on the same finding → review (cautious default).
+#
+# Capabilities covered:
+#   malware:v1    — argus, skillspector, malwarebazaar, guarddog
+#   vulnerability:v1 — osv, grype, ossindex, depsdev
+#
+# Usage — include in every submission body:
+#   "policy_ref": "argus-onramp"
+
+apiVersion: scintx.policy/v1
+kind: Policy
+
+metadata:
+  id: argus-onramp
+  version: "1"
+  description: >
+    Argus On-Ramp default security gate.
+    Confirmed malware from any engine → deny.
+    Critical CVSS ≥ 9.0 vulnerability → deny.
+    High CVSS ≥ 7.0 → review.
+    Provider errors and timeouts → review (never block on tool failure).
+
+spec:
+  # Edge cases: prefer caution over blocking on tool failure.
+  on_timeout: review
+  on_error: review
+  on_missing_verdict: review
+
+  # When providers disagree on whether the same finding is exploitable,
+  # escalate to human review rather than silently allowing.
+  merge_conflicts: review
+
+  # Baseline verdict → decision mapping.
+  # Finding rules below can escalate individual findings further.
+  verdicts:
+    pass: allow     # clean scan
+    warn: review    # heuristic / borderline signal
+    fail: review    # provider-level fail; findings rules below can → deny
+    unknown: defer  # reputation unknown — wait for more data
+
+  findings:
+    # ── Malware ───────────────────────────────────────────────────────────────
+    # Any confirmed malware finding from any engine → deny immediately.
+    # One signal is enough — this is the core VirusTotal-style gate.
+    # Covers: argus, skillspector (prompt injection), malwarebazaar, guarddog.
+    - when:
+        finding_type: malware
+        assessment: affected
+      decision: deny
+      reason_code: malware_detected
+      message: "Malware confirmed by provider (finding {{finding_id}})"
+
+    # ── Vulnerabilities ───────────────────────────────────────────────────────
+    # Critical severity (CVSS ≥ 9.0) and confirmed affected → deny.
+    # Rationale: critical unpatched CVEs in a registry package are a hard block.
+    - when:
+        finding_type: vulnerability
+        assessment: affected
+        severity_scheme: CVSS
+        min_score: 9.0
+      decision: deny
+      reason_code: critical_vulnerability
+      message: "Critical CVSS {{score}} vulnerability — package is affected"
+
+    # High severity (CVSS ≥ 7.0) → request review.
+    - when:
+        finding_type: vulnerability
+        assessment: affected
+        severity_scheme: CVSS
+        min_score: 7.0
+      decision: review
+      reason_code: high_vulnerability
+      message: "High CVSS {{score}} vulnerability — review before use"
+
+    # Any other confirmed vulnerability → review.
+    # Catches lower-severity or unscored findings that still need attention.
+    - when:
+        finding_type: vulnerability
+        assessment: affected
+      decision: review
+      reason_code: vulnerability_detected
+      message: "Vulnerability confirmed affected (finding {{finding_id}})"
+
+  # When deferred, retry after 2 h to let reputation lookups settle.
+  defer:
+    resume_after: 2h
