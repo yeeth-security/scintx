@@ -101,6 +101,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /v1/providers/{id}/capabilities", s.getProviderCapabilities)
 	mux.HandleFunc("POST /v1/artifacts", s.uploadArtifact)
 	mux.HandleFunc("HEAD /v1/artifacts/{digest}", s.checkArtifact)
+	mux.HandleFunc("GET /v1/artifacts/{digest}", s.getArtifact)
 	mux.HandleFunc("GET /v1/.well-known/scintx", s.wellKnown)
 	mux.HandleFunc("GET /v1/events", s.listEvents)
 	if s.auth != nil {
@@ -555,6 +556,26 @@ func (s *Server) checkArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(404)
+}
+
+// getArtifact returns stored blob bytes so callers (e.g. on-ramp file browser)
+// can re-hydrate content without re-uploading. Digest is "sha256:<hex>".
+func (s *Server) getArtifact(w http.ResponseWriter, r *http.Request) {
+	digest := r.PathValue("digest")
+	body, ok, err := s.store.GetArtifact(digest)
+	if err != nil {
+		writeProblem(w, 500, "store_error", err.Error())
+		return
+	}
+	if !ok {
+		writeProblem(w, 404, "not_found", "artifact not found")
+		return
+	}
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+	w.Header().Set("Cache-Control", "private, max-age=300")
+	w.WriteHeader(200)
+	_, _ = w.Write(body)
 }
 
 func (s *Server) wellKnown(w http.ResponseWriter, r *http.Request) {

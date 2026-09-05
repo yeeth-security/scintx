@@ -87,8 +87,11 @@ func (c *Client) Scan(ctx context.Context, content []byte, ecosystem string) ([]
 	}
 	defer os.Remove(tmpFile) //nolint:errcheck
 
-	// Build: guarddog <ecosystem> scan --output-format json --use-file <path>
-	args := []string{ecosystem, "scan", "--output-format", "json", "--use-file", tmpFile}
+	// GuardDog 3.x CLI: `guarddog <eco> scan [OPTIONS] TARGET`
+	// - Local archives are the positional TARGET (there is no --use-file).
+	// - Sandbox is required by default; Cloud Run / containers lack the
+	//   kernel sandbox → scans fail unless we pass --no-sandbox.
+	args := []string{ecosystem, "scan", "--output-format", "json", "--no-sandbox", tmpFile}
 	cmd := exec.CommandContext(scanCtx, c.BinaryPath, args...) //nolint:gosec
 
 	var stdout, stderr bytes.Buffer
@@ -170,16 +173,20 @@ func writeTempFile(content []byte, ecosystem string) (string, error) {
 }
 
 // ecosystemTempExt returns the file extension GuardDog expects for each ecosystem.
+// Names match GuardDog 3.x subcommands (crates, rubygems, extension, …).
 func ecosystemTempExt(ecosystem string) string {
 	switch ecosystem {
 	case "pypi":
 		return ".tar.gz"
 	case "npm":
 		return ".tgz"
-	case "cargo":
+	case "crates":
 		return ".crate"
-	case "gem":
+	case "rubygems":
 		return ".gem"
+	case "extension":
+		// VSIX is a zip archive; GuardDog's extension scanner accepts it.
+		return ".vsix"
 	case "go":
 		// Go modules are usually .zip archives in the module proxy format.
 		return ".zip"
@@ -189,19 +196,21 @@ func ecosystemTempExt(ecosystem string) string {
 }
 
 // purlTypeToEcosystem maps a PURL type string to the guarddog subcommand name.
+// GuardDog 3.x uses crates / rubygems / extension (not cargo / gem / npm for VSIX).
 func purlTypeToEcosystem(purlType string) (string, bool) {
 	switch purlType {
-	case "npm", "vscode-extension":
-		// VSCode extensions are VSIX files (npm package format internally).
+	case "npm":
 		return "npm", true
+	case "vscode-extension":
+		return "extension", true
 	case "pypi":
 		return "pypi", true
 	case "golang":
 		return "go", true
 	case "cargo":
-		return "cargo", true
+		return "crates", true
 	case "gem":
-		return "gem", true
+		return "rubygems", true
 	default:
 		return "", false
 	}
@@ -219,8 +228,7 @@ func filenameToEcosystem(name string) (string, bool) {
 	case strings.HasSuffix(name, ".crate"):
 		return "cargo", true
 	case strings.HasSuffix(name, ".vsix"):
-		// VSIX is a zip-based npm package format.
-		return "npm", true
+		return "extension", true
 	default:
 		return "", false
 	}

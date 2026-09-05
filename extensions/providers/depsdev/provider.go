@@ -58,7 +58,7 @@ func (p *Provider) Capabilities() api.ProviderCapabilities {
 					},
 				}},
 				FindingTypes:        []string{"vulnerability"},
-				NativeOutputFormats: []string{"depsdev"},
+				NativeOutputFormats: []string{"depsdev", "sarif"},
 				CostHint:            "cheap",
 				LatencyHint:         "low",
 			},
@@ -72,7 +72,7 @@ func (p *Provider) Capabilities() api.ProviderCapabilities {
 					},
 				}},
 				FindingTypes:        []string{"malware"},
-				NativeOutputFormats: []string{"depsdev"},
+				NativeOutputFormats: []string{"depsdev", "sarif"},
 				CostHint:            "cheap",
 				LatencyHint:         "low",
 			},
@@ -136,8 +136,7 @@ func (p *Provider) Assess(ctx context.Context, artifact api.Artifact, capability
 		if raw == nil {
 			raw = []byte(`{"version":null}`)
 		}
-		d := sha256.Sum256(raw)
-		return &api.ProviderResult{
+		res := &api.ProviderResult{
 			ID:                       "res_" + api.RandHex(),
 			SchemaVersion:            "1.0.0",
 			Provider:                 api.ProviderRef{ID: providerID, Version: providerVersion},
@@ -145,13 +144,9 @@ func (p *Provider) Assess(ctx context.Context, artifact api.Artifact, capability
 			CapabilityManifestDigest: p.ManifestDigest,
 			Execution:                api.Execution{Status: api.ExecutionCompleted, StartedAt: started, FinishedAt: finished},
 			Verdict:                  verdictFromFindings(capID, nil),
-			RawResult: &api.ResourceReference{
-				URI:       "urn:scintx:blob:depsdev_" + api.RandHex(),
-				MediaType: "application/json",
-				Digests:   map[string]string{"sha256": hex.EncodeToString(d[:])},
-				Format:    "depsdev",
-			},
-		}, nil
+		}
+		attachReports(res, raw, nil)
+		return res, nil
 	}
 
 	system := version.VersionKey.System
@@ -204,7 +199,7 @@ func (p *Provider) Assess(ctx context.Context, artifact api.Artifact, capability
 	verdict := verdictFromFindings(capID, findings)
 	finished := time.Now().UTC()
 
-	// Combine raw payloads for the digest.
+	// Combine raw payloads for the digest / native report.
 	rawCombined, _ := json.Marshal(map[string]any{
 		"purlLookup": json.RawMessage(rawLookup),
 		"findings":   json.RawMessage(rawFindings),
@@ -212,9 +207,8 @@ func (p *Provider) Assess(ctx context.Context, artifact api.Artifact, capability
 	if rawCombined == nil {
 		rawCombined = []byte("{}")
 	}
-	rawDigest := sha256.Sum256(rawCombined)
 
-	return &api.ProviderResult{
+	res := &api.ProviderResult{
 		ID:                       "res_" + api.RandHex(),
 		SchemaVersion:            "1.0.0",
 		Provider:                 api.ProviderRef{ID: providerID, Version: providerVersion},
@@ -223,13 +217,9 @@ func (p *Provider) Assess(ctx context.Context, artifact api.Artifact, capability
 		Execution:                api.Execution{Status: api.ExecutionCompleted, StartedAt: started, FinishedAt: finished},
 		Verdict:                  verdict,
 		Findings:                 findings,
-		RawResult: &api.ResourceReference{
-			URI:       "urn:scintx:blob:depsdev_" + api.RandHex(),
-			MediaType: "application/json",
-			Digests:   map[string]string{"sha256": hex.EncodeToString(rawDigest[:])},
-			Format:    "depsdev",
-		},
-	}, nil
+	}
+	attachReports(res, rawCombined, collectFindingsList(fr))
+	return res, nil
 }
 
 func mapTransport(started time.Time, capRef string, err error) *api.ProviderResult {

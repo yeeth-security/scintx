@@ -191,6 +191,13 @@ func (o *Orchestrator) Process(ctx context.Context, subID string) error {
 					}
 				}
 				res.SubmissionID = sub.ID
+				// Persist companion report blobs (native + SARIF, …) before the result row.
+				for digest, content := range res.PendingArtifacts {
+					if err := o.store.PutArtifact(digest, content); err != nil {
+						slog.Error("put raw report artifact", "digest", digest, "err", err)
+					}
+				}
+				res.PendingArtifacts = nil
 				// Only cache successful completed assessments.
 				if res.Execution.Status == api.ExecutionCompleted {
 					if err := o.cache.Set(ctx, cacheKey, res, o.cacheTTL); err != nil {

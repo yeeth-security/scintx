@@ -142,12 +142,14 @@ func (c *Client) run(ctx context.Context, target string) ([]byte, []grypMatch, e
 	defer cancel()
 
 	args := []string{target, "-o", "json"}
-	if c.DisableAutoUpdate {
-		// Prevent grype from trying to update its vulnerability DB.
-		args = append(args, "--db-update-url", "")
-	}
-
 	cmd := exec.CommandContext(scanCtx, c.BinaryPath, args...) //nolint:gosec
+
+	// Newer Grype dropped --db-update-url. When auto-update is disabled, set the
+	// env Grype itself documents (also set in compose/Cloud Run). Do not pass
+	// removed CLI flags — they cause "unknown flag" transport errors.
+	if c.DisableAutoUpdate {
+		cmd.Env = append(os.Environ(), "GRYPE_DB_AUTO_UPDATE=false")
+	}
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

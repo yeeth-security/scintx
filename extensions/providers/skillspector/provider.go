@@ -85,7 +85,7 @@ func (p *Provider) Capabilities() api.ProviderCapabilities {
 					// is stored in Finding.Fingerprints["skillspector.category"].
 					"malware",
 				},
-				NativeOutputFormats: []string{"skillspector-json"},
+				NativeOutputFormats: []string{"skillspector-json", "sarif"},
 				// Static mode is fast (~5s per skill file); LLM mode can be 30–120s.
 				// Only invoked when skill files are present — packages without them
 				// are filtered out before SkillSpector runs.
@@ -246,9 +246,8 @@ func (p *Provider) buildResult(started time.Time, raw []byte, report *ssReport, 
 	findings := issuesToFindings(report)
 	verdict := verdictFromReport(report, findings)
 	finished := time.Now().UTC()
-	rawDigest := sha256.Sum256(raw)
 
-	return &api.ProviderResult{
+	res := &api.ProviderResult{
 		ID:                       "res_" + api.RandHex(),
 		SchemaVersion:            "1.0.0",
 		Provider:                 api.ProviderRef{ID: providerID, Version: providerVersion},
@@ -257,13 +256,9 @@ func (p *Provider) buildResult(started time.Time, raw []byte, report *ssReport, 
 		Execution:                api.Execution{Status: api.ExecutionCompleted, StartedAt: started, FinishedAt: finished},
 		Verdict:                  verdict,
 		Findings:                 findings,
-		RawResult: &api.ResourceReference{
-			URI:       "urn:scintx:blob:skillspector_" + api.RandHex(),
-			MediaType: "application/json",
-			Digests:   map[string]string{"sha256": hex.EncodeToString(rawDigest[:])},
-			Format:    "skillspector-json",
-		},
-	}, nil
+	}
+	attachReports(res, raw, report)
+	return res, nil
 }
 
 func ssError(started time.Time, code api.ProviderErrorCode, msg string) *api.ProviderResult {

@@ -104,8 +104,21 @@ func TestAssessBenignVerdict(t *testing.T) {
 	if res.Provider.ID != "argus" {
 		t.Fatalf("provider=%s", res.Provider.ID)
 	}
-	if res.RawResult == nil || res.RawResult.Format != "argus" {
-		t.Fatalf("raw=%+v", res.RawResult)
+	// Expect native + SARIF companion reports in raw_results[].
+	var hasNative, hasSARIF bool
+	for _, rr := range res.RawResults {
+		if rr.Format == "argus" && rr.Digests["sha256"] != "" {
+			hasNative = true
+		}
+		if rr.Format == api.FormatSARIF && rr.MediaType == api.MediaTypeSARIF {
+			hasSARIF = true
+		}
+	}
+	if !hasNative || !hasSARIF {
+		t.Fatalf("raw_results=%+v want native argus + sarif", res.RawResults)
+	}
+	if len(res.PendingArtifacts) < 2 {
+		t.Fatalf("pending artifacts=%d want >=2", len(res.PendingArtifacts))
 	}
 }
 
@@ -292,8 +305,9 @@ func TestCapabilitiesRequireContent(t *testing.T) {
 	if len(ft) != 1 || ft[0] != "malware" {
 		t.Fatalf("finding types=%v", ft)
 	}
-	if len(caps.Capabilities[0].NativeOutputFormats) != 1 || caps.Capabilities[0].NativeOutputFormats[0] != "argus" {
-		t.Fatalf("native formats=%v", caps.Capabilities[0].NativeOutputFormats)
+	fmts := caps.Capabilities[0].NativeOutputFormats
+	if len(fmts) != 2 || fmts[0] != "argus" || fmts[1] != "sarif" {
+		t.Fatalf("native formats=%v want [argus sarif]", fmts)
 	}
 }
 

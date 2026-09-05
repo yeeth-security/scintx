@@ -32,7 +32,11 @@
       "type": "array",
       "items": {"$ref": "finding.schema.json"}
     },
-    "raw_result": {"$ref": "resource-reference.schema.json"},
+    "raw_results": {
+      "type": "array",
+      "description": "Companion reports (native tool output, SARIF, SBOM, attestation, …). Discriminated by format / media_type. Mirrors multi-run / multi-ref patterns in SARIF, CycloneDX, and in-toto.",
+      "items": {"$ref": "resource-reference.schema.json"}
+    },
     "cache": {"$ref": "#/$defs/CacheInfo"},
     "extensions": {"type": "object"}
   },

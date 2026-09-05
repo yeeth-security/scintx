@@ -233,8 +233,27 @@ func TestE2E_VulnerablePackage_DenyDecision(t *testing.T) {
 	if f.Assessment == nil || f.Assessment.Status != api.AssessAffected {
 		t.Fatalf("expected assessment affected, got %+v", f.Assessment)
 	}
-	if r.RawResult == nil || r.RawResult.Digests["sha256"] == "" {
-		t.Fatalf("expected raw_result with sha256 digest, got %+v", r.RawResult)
+	if len(r.RawResults) == 0 {
+		t.Fatalf("expected raw_results with at least one companion report, got empty")
+	}
+	hasDigest := false
+	for _, rr := range r.RawResults {
+		if rr.Digests["sha256"] == "" {
+			continue
+		}
+		hasDigest = true
+		// Orchestrator should have persisted PendingArtifacts via PutArtifact.
+		digestKey := "sha256:" + rr.Digests["sha256"]
+		ok, err := store.HasArtifact(digestKey)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !ok {
+			t.Fatalf("expected persisted artifact for raw_results digest %s", digestKey)
+		}
+	}
+	if !hasDigest {
+		t.Fatalf("expected raw_results entry with sha256 digest, got %+v", r.RawResults)
 	}
 
 	events, err := store.Events()
@@ -544,6 +563,16 @@ func TestE2E_ArtifactUpload(t *testing.T) {
 	srv.Routes().ServeHTTP(headRR, headReq)
 	if headRR.Code != 200 {
 		t.Fatalf("expected 200 on HEAD artifact, got %d", headRR.Code)
+	}
+
+	getReq := httptest.NewRequest("GET", "/v1/artifacts/"+digest, nil)
+	getRR := httptest.NewRecorder()
+	srv.Routes().ServeHTTP(getRR, getReq)
+	if getRR.Code != 200 {
+		t.Fatalf("expected 200 on GET artifact, got %d", getRR.Code)
+	}
+	if getRR.Body.String() != string(body) {
+		t.Fatalf("GET body mismatch: got %q want %q", getRR.Body.String(), body)
 	}
 }
 

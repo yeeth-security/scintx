@@ -64,6 +64,21 @@ func issueToFinding(issue ssIssue) api.Finding {
 	if issue.Location.StartLine > 0 {
 		extensions["skillspector.start_line"] = issue.Location.StartLine
 	}
+	// SARIF-shaped locations for UI normalizers (apps/web/src/lib/sarif.ts).
+	if issue.Location.File != "" {
+		extensions["skillspector.file"] = issue.Location.File
+		loc := map[string]any{
+			"physicalLocation": map[string]any{
+				"artifactLocation": map[string]any{"uri": issue.Location.File},
+			},
+		}
+		if issue.Location.StartLine > 0 {
+			loc["physicalLocation"].(map[string]any)["region"] = map[string]any{
+				"startLine": issue.Location.StartLine,
+			}
+		}
+		extensions["locations"] = []any{loc}
+	}
 
 	return api.Finding{
 		// Finding ID: stable combination of the issue ID and file path.

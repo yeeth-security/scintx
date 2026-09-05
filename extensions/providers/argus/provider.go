@@ -66,7 +66,7 @@ func (p *Provider) Capabilities() api.ProviderCapabilities {
 					},
 				},
 				FindingTypes:        []string{"malware"},
-				NativeOutputFormats: []string{"argus"},
+				NativeOutputFormats: []string{"argus", "sarif"},
 				CostHint:            "expensive",
 				LatencyHint:         "high",
 			},
@@ -116,9 +116,8 @@ func (p *Provider) Assess(ctx context.Context, artifact api.Artifact, capability
 	findings := matchesToFindings(job)
 	verdict := verdictFromJob(job, findings)
 	finished := time.Now().UTC()
-	rawDigest := sha256.Sum256(raw)
 
-	return &api.ProviderResult{
+	res := &api.ProviderResult{
 		ID:                       "res_" + api.RandHex(),
 		SchemaVersion:            "1.0.0",
 		Provider:                 api.ProviderRef{ID: providerID, Version: providerVersion},
@@ -127,13 +126,9 @@ func (p *Provider) Assess(ctx context.Context, artifact api.Artifact, capability
 		Execution:                api.Execution{Status: api.ExecutionCompleted, StartedAt: started, FinishedAt: finished},
 		Verdict:                  verdict,
 		Findings:                 findings,
-		RawResult: &api.ResourceReference{
-			URI:       "urn:scintx:blob:argus_" + api.RandHex(),
-			MediaType: "application/json",
-			Digests:   map[string]string{"sha256": hex.EncodeToString(rawDigest[:])},
-			Format:    "argus",
-		},
-	}, nil
+	}
+	attachReports(res, raw, job)
+	return res, nil
 }
 
 // artifactFilename picks a filename for the multipart upload.

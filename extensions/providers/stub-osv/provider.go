@@ -170,9 +170,8 @@ func (s *Provider) Assess(ctx context.Context, artifact api.Artifact, capability
 
 	finished := time.Now().UTC()
 	rawJSON, _ := json.Marshal(map[string]any{"source": "stub-db", "matched_count": len(matched)})
-	rawDigest := sha256.Sum256(rawJSON)
 
-	return &api.ProviderResult{
+	res := &api.ProviderResult{
 		ID:                       "res_" + api.RandHex(),
 		SchemaVersion:            "1.0.0",
 		SubmissionID:             "",
@@ -182,13 +181,11 @@ func (s *Provider) Assess(ctx context.Context, artifact api.Artifact, capability
 		Execution:                api.Execution{Status: api.ExecutionCompleted, StartedAt: started, FinishedAt: finished},
 		Verdict:                  verdict,
 		Findings:                 findings,
-		RawResult: &api.ResourceReference{
-			URI:       "urn:scintx:blob:raw_" + api.RandHex(),
-			MediaType: "application/json",
-			Digests:   map[string]string{"sha256": hex.EncodeToString(rawDigest[:])},
-			Format:    "osv",
-		},
-	}, nil
+	}
+	if len(rawJSON) > 0 {
+		api.AttachRawReport(res, "osv", "", "application/json", api.RoleNative, rawJSON)
+	}
+	return res, nil
 }
 
 func errorResult(providerID, version, capability, manifestDigest string, started time.Time, code api.ProviderErrorCode, msg string) *api.ProviderResult {

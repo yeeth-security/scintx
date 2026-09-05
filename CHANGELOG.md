@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `ProviderResult.raw_results[]` — first-class multi-report companion artifacts
+  (native tool JSON, SARIF, future SBOM/attestation). Discriminated by
+  `format` / `media_type` on each `ResourceReference`.
+- `api.AttachRawReport` — hash + append a report and stash bytes for the
+  orchestrator to persist via `PutArtifact`.
+- Per-provider SARIF 2.1.0 companion reports in `raw_results` (native→SARIF
+  convert in each adapter, or tool passthrough where available).
 - OSV provider: `vscode-extension` PURL support with ecosystem fallback when
   PURL-only queries miss (e.g. Open VSX malware indexed as
   `VSCode:https://open-vsx.org` / `publisher.name`).
@@ -25,6 +32,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - JSON Schema 2020-12 documents, OpenAPI 3.1, and README quickstart.
 - CI (`make check`) and GitHub Actions workflows.
 - EPL-2.0 license.
+
+### Removed
+
+- `ProviderResult.raw_result` (singular). Use `raw_results` only. Pre-release
+  breaking change — no compatibility alias.
 
 ### Changed
 

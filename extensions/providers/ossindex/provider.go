@@ -64,7 +64,7 @@ func (p *Provider) Capabilities() api.ProviderCapabilities {
 					},
 				},
 				FindingTypes:        []string{"vulnerability"},
-				NativeOutputFormats: []string{"ossindex"},
+				NativeOutputFormats: []string{"ossindex", "sarif"},
 			},
 		},
 		// Capability flag: may receive anonymous adjudication (decision + PURL)
@@ -115,9 +115,8 @@ func (p *Provider) Assess(ctx context.Context, artifact api.Artifact, capability
 	findings := vulnsToFindings(canonical, report.Vulnerabilities)
 	verdict := verdictFromFindings(findings)
 	finished := time.Now().UTC()
-	rawDigest := sha256.Sum256(raw)
 
-	return &api.ProviderResult{
+	res := &api.ProviderResult{
 		ID:                       "res_" + api.RandHex(),
 		SchemaVersion:            "1.0.0",
 		Provider:                 api.ProviderRef{ID: providerID, Version: providerVersion},
@@ -126,13 +125,9 @@ func (p *Provider) Assess(ctx context.Context, artifact api.Artifact, capability
 		Execution:                api.Execution{Status: api.ExecutionCompleted, StartedAt: started, FinishedAt: finished},
 		Verdict:                  verdict,
 		Findings:                 findings,
-		RawResult: &api.ResourceReference{
-			URI:       "urn:scintx:blob:ossindex_" + api.RandHex(),
-			MediaType: "application/json",
-			Digests:   map[string]string{"sha256": hex.EncodeToString(rawDigest[:])},
-			Format:    "ossindex",
-		},
-	}, nil
+	}
+	attachReports(res, raw, report.Vulnerabilities)
+	return res, nil
 }
 
 func errorResult(started time.Time, code api.ProviderErrorCode, msg string) *api.ProviderResult {

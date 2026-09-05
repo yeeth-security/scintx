@@ -159,9 +159,14 @@ type ProviderResult struct {
 	Execution                Execution          `json:"execution"`
 	Verdict                  *Verdict           `json:"verdict,omitempty"`
 	Findings                 []Finding          `json:"findings,omitempty"`
-	RawResult                *ResourceReference `json:"raw_result,omitempty"`
-	Cache                    *CacheInfo         `json:"cache,omitempty"`
-	Extensions               map[string]any     `json:"extensions,omitempty"`
+	// RawResults holds companion reports (native tool JSON, SARIF, SBOM, …).
+	// Discriminate entries by format / media_type on each ResourceReference.
+	RawResults []ResourceReference `json:"raw_results,omitempty"`
+	Cache      *CacheInfo          `json:"cache,omitempty"`
+	Extensions map[string]any      `json:"extensions,omitempty"`
+	// PendingArtifacts maps digest keys ("sha256:<hex>") to blob bytes that the
+	// orchestrator must PutArtifact before persisting this result. Not serialized.
+	PendingArtifacts map[string][]byte `json:"-"`
 }
 
 type ProviderRef struct {

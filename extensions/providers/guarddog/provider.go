@@ -12,7 +12,10 @@
 //
 // Supported ecosystems (detected from the artifact's PURL type):
 //
-//	npm, pypi, golang, cargo, gem, vscode-extension (→ npm command)
+//	npm → npm, pypi → pypi, golang → go, cargo → crates,
+//	gem → rubygems, vscode-extension → extension
+//
+// GuardDog 3.x CLI (local archive): `guarddog <eco> scan --no-sandbox <path>`
 package guarddog
 
 import (
@@ -83,7 +86,7 @@ func (p *Provider) Capabilities() api.ProviderCapabilities {
 					// in Finding.Fingerprints["guarddog.rule"].
 					"malware",
 				},
-				NativeOutputFormats: []string{"guarddog-json"},
+				NativeOutputFormats: []string{"guarddog-json", "sarif"},
 				CostHint:            "medium",
 				LatencyHint:         "medium",
 			},
@@ -133,9 +136,8 @@ func (p *Provider) Assess(ctx context.Context, artifact api.Artifact, _ api.Capa
 	findings := issuesToFindings(issues)
 	verdict := verdictFromFindings(findings)
 	finished := time.Now().UTC()
-	rawDigest := sha256.Sum256(raw)
 
-	return &api.ProviderResult{
+	res := &api.ProviderResult{
 		ID:                       "res_" + api.RandHex(),
 		SchemaVersion:            "1.0.0",
 		Provider:                 api.ProviderRef{ID: providerID, Version: providerVersion},
@@ -144,13 +146,9 @@ func (p *Provider) Assess(ctx context.Context, artifact api.Artifact, _ api.Capa
 		Execution:                api.Execution{Status: api.ExecutionCompleted, StartedAt: started, FinishedAt: finished},
 		Verdict:                  verdict,
 		Findings:                 findings,
-		RawResult: &api.ResourceReference{
-			URI:       "urn:scintx:blob:guarddog_" + api.RandHex(),
-			MediaType: "application/json",
-			Digests:   map[string]string{"sha256": hex.EncodeToString(rawDigest[:])},
-			Format:    "guarddog-json",
-		},
-	}, nil
+	}
+	attachReports(res, raw, issues)
+	return res, nil
 }
 
 // resolveEcosystem picks the GuardDog ecosystem subcommand from the artifact.
