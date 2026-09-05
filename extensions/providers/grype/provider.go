@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/yeeth-security/scintx/api"
+	"github.com/yeeth-security/scintx/extensions/providers/internal/cliexec"
 )
 
 const (
@@ -153,6 +154,10 @@ func (p *Provider) Assess(ctx context.Context, artifact api.Artifact, _ api.Capa
 		}
 		if errors.Is(err, errBinaryNotFound) {
 			return grypError(started, api.ErrTransport, "grype binary not found in PATH; install from github.com/anchore/grype"), nil
+		}
+		var killed *cliexec.KilledError
+		if errors.As(err, &killed) {
+			return grypError(started, api.ErrTransport, killed.Error()), nil
 		}
 		return grypError(started, api.ErrTransport, err.Error()), nil
 	}

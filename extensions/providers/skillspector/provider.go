@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/yeeth-security/scintx/api"
+	"github.com/yeeth-security/scintx/extensions/providers/internal/cliexec"
 )
 
 const (
@@ -239,6 +240,11 @@ func (p *Provider) buildResult(started time.Time, raw []byte, report *ssReport, 
 		}
 		if errors.Is(err, errBinaryNotFound) {
 			return ssError(started, api.ErrTransport, "skillspector binary not found; install with: pip install skillspector"), nil
+		}
+		var killed *cliexec.KilledError
+		if errors.As(err, &killed) {
+			// OOM / cgroup kill — still a transport-class failure, but message is actionable.
+			return ssError(started, api.ErrTransport, killed.Error()), nil
 		}
 		return ssError(started, api.ErrTransport, err.Error()), nil
 	}

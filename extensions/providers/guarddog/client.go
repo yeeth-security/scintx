@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/yeeth-security/scintx/extensions/providers/internal/cliexec"
 )
 
 // errBinaryNotFound is returned when the guarddog executable is not in PATH.
@@ -31,8 +33,7 @@ func newClientFromEnv() *Client {
 	if bin == "" {
 		bin = "guarddog"
 	}
-	timeout := parseTimeout()
-	return &Client{BinaryPath: bin, Timeout: timeout}
+	return &Client{BinaryPath: bin, Timeout: parseTimeout()}
 }
 
 func parseTimeout() time.Duration {
@@ -88,31 +89,23 @@ func (c *Client) Scan(ctx context.Context, content []byte, ecosystem string) ([]
 	defer os.Remove(tmpFile) //nolint:errcheck
 
 	// GuardDog 3.x CLI: `guarddog <eco> scan [OPTIONS] TARGET`
-	// - Local archives are the positional TARGET (there is no --use-file).
-	// - Sandbox is required by default; Cloud Run / containers lack the
-	//   kernel sandbox → scans fail unless we pass --no-sandbox.
-	args := []string{ecosystem, "scan", "--output-format", "json", "--no-sandbox", tmpFile}
+	// Local archives are the positional TARGET (there is no --use-file).
+	// Always keep the kernel sandbox (Landlock). Do not pass --no-sandbox —
+	// production must run on a host that supports it (GCE/VM, not Cloud Run
+	// gVisor). If the sandbox is unavailable GuardDog fails closed.
+	args := []string{ecosystem, "scan", "--output-format", "json", tmpFile}
 	cmd := exec.CommandContext(scanCtx, c.BinaryPath, args...) //nolint:gosec
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	if err := cmd.Run(); err != nil {
-		// exec.ExitError is returned for non-zero exit codes — GuardDog exits 1
-		// when it finds issues, which is normal. Only treat it as a real error
-		// if stdout is empty (nothing to parse).
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) && stdout.Len() > 0 {
-			// GuardDog found issues — that is not an execution failure for us.
-		} else if errors.Is(err, exec.ErrNotFound) ||
-			strings.Contains(err.Error(), "executable file not found") ||
-			strings.Contains(err.Error(), "no such file") {
+	runErr := cmd.Run()
+	if classErr := cliexec.Classify("guarddog", runErr, scanCtx, ctx, stdout.Len(), stderr.String()); classErr != nil {
+		if strings.Contains(classErr.Error(), "binary not found") {
 			return nil, nil, errBinaryNotFound
-		} else if stdout.Len() == 0 {
-			// No output at all — real subprocess failure.
-			return nil, nil, fmt.Errorf("guarddog exited %v, stderr: %s", err, truncate(stderr.String(), 300))
 		}
+		return nil, nil, classErr
 	}
 
 	raw := stdout.Bytes()
@@ -232,11 +225,4 @@ func filenameToEcosystem(name string) (string, bool) {
 	default:
 		return "", false
 	}
-}
-
-func truncate(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[:n] + "…"
 }

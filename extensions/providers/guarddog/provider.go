@@ -15,7 +15,8 @@
 //	npm → npm, pypi → pypi, golang → go, cargo → crates,
 //	gem → rubygems, vscode-extension → extension
 //
-// GuardDog 3.x CLI (local archive): `guarddog <eco> scan --no-sandbox <path>`
+// GuardDog 3.x CLI (local archive): `guarddog <eco> scan <path>`
+// (kernel Landlock sandbox required — do not use --no-sandbox in production)
 package guarddog
 
 import (
@@ -28,6 +29,7 @@ import (
 	"time"
 
 	"github.com/yeeth-security/scintx/api"
+	"github.com/yeeth-security/scintx/extensions/providers/internal/cliexec"
 )
 
 const (
@@ -129,6 +131,10 @@ func (p *Provider) Assess(ctx context.Context, artifact api.Artifact, _ api.Capa
 		}
 		if errors.Is(err, errBinaryNotFound) {
 			return guarddogError(started, api.ErrTransport, "guarddog binary not found in PATH; install with: pip install guarddog"), nil
+		}
+		var killed *cliexec.KilledError
+		if errors.As(err, &killed) {
+			return guarddogError(started, api.ErrTransport, killed.Error()), nil
 		}
 		return guarddogError(started, api.ErrTransport, err.Error()), nil
 	}

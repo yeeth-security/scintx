@@ -10,6 +10,8 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/yeeth-security/scintx/extensions/providers/internal/cliexec"
 )
 
 // errBinaryNotFound is returned when the grype executable is not in PATH.
@@ -144,28 +146,28 @@ func (c *Client) run(ctx context.Context, target string) ([]byte, []grypMatch, e
 	args := []string{target, "-o", "json"}
 	cmd := exec.CommandContext(scanCtx, c.BinaryPath, args...) //nolint:gosec
 
-	// Newer Grype dropped --db-update-url. When auto-update is disabled, set the
-	// env Grype itself documents (also set in compose/Cloud Run). Do not pass
-	// removed CLI flags — they cause "unknown flag" transport errors.
+	// Prefer env over removed/renamed CLI flags. Seeded images run offline:
+	// no app-update ping, no DB download, no age fail when the bake is older
+	// than Grype's default max age.
 	if c.DisableAutoUpdate {
-		cmd.Env = append(os.Environ(), "GRYPE_DB_AUTO_UPDATE=false")
+		cmd.Env = append(
+			os.Environ(),
+			"GRYPE_DB_AUTO_UPDATE=false",
+			"GRYPE_CHECK_FOR_APP_UPDATE=false",
+			"GRYPE_DB_VALIDATE_AGE=false",
+		)
 	}
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	if err := cmd.Run(); err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) && stdout.Len() > 0 {
-			// Grype exits 1 when vulnerabilities are found — not an error for us.
-		} else if errors.Is(err, exec.ErrNotFound) ||
-			strings.Contains(err.Error(), "executable file not found") ||
-			strings.Contains(err.Error(), "no such file") {
+	runErr := cmd.Run()
+	if classErr := cliexec.Classify("grype", runErr, scanCtx, ctx, stdout.Len(), stderr.String()); classErr != nil {
+		if strings.Contains(classErr.Error(), "binary not found") {
 			return nil, nil, errBinaryNotFound
-		} else if stdout.Len() == 0 {
-			return nil, nil, fmt.Errorf("grype exited %v, stderr: %s", err, truncate(stderr.String(), 300))
 		}
+		return nil, nil, classErr
 	}
 
 	raw := stdout.Bytes()
@@ -179,11 +181,4 @@ func (c *Client) run(ctx context.Context, target string) ([]byte, []grypMatch, e
 		return raw, nil, fmt.Errorf("grype: parse output: %w", err)
 	}
 	return raw, report.Matches, nil
-}
-
-func truncate(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[:n] + "…"
 }

@@ -15,6 +15,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/yeeth-security/scintx/extensions/providers/internal/cliexec"
 )
 
 // errBinaryNotFound is returned when the skillspector binary is not in PATH.
@@ -224,17 +226,12 @@ func (c *Client) runSkillspector(ctx context.Context, dir string) ([]byte, *ssRe
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	if err := cmd.Run(); err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) && stdout.Len() > 0 {
-			// Non-zero exit with output means issues found — not an error for us.
-		} else if errors.Is(err, exec.ErrNotFound) ||
-			strings.Contains(err.Error(), "executable file not found") ||
-			strings.Contains(err.Error(), "no such file") {
+	runErr := cmd.Run()
+	if classErr := cliexec.Classify("skillspector", runErr, scanCtx, ctx, stdout.Len(), stderr.String()); classErr != nil {
+		if strings.Contains(classErr.Error(), "binary not found") {
 			return nil, nil, errBinaryNotFound
-		} else if stdout.Len() == 0 {
-			return nil, nil, fmt.Errorf("skillspector exited %v, stderr: %s", err, truncate(stderr.String(), 400))
 		}
+		return nil, nil, classErr
 	}
 
 	raw := stdout.Bytes()
@@ -389,11 +386,4 @@ func writeSkillFile(r io.Reader, entryName, destDir string) error {
 	defer out.Close() //nolint:errcheck
 	_, err = io.Copy(out, r)
 	return err
-}
-
-func truncate(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[:n] + "…"
 }
